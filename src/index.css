@@ -1,0 +1,202 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ====== CONFIG GLOBAL ====== */
+
+:root {
+  /* Fuentes base */
+  --font-sans: "sofia-pro", system-ui, sans-serif;
+  --font-heading: "sofia-pro", system-ui, sans-serif;
+  --font-bookmania: "bookmania", system-ui, sans-serif;
+
+  line-height: 1.5;
+  font-weight: 400;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* radio base para shadcn */
+  --radius: 0.75rem;
+
+  /* ===== Light theme AdPaws ===== */
+  /* Colores base (hex) */
+  --background: #E4F0E4; /* bg-soft */
+  --foreground: #1a1a1a; /* negro suave */
+
+  --card: #ffffff;
+  --card-foreground: #1a1a1a;
+
+  --popover: #ffffff;
+  --popover-foreground: #1a1a1a;
+
+  --primary: #80af80; /* primario */
+  --primary-foreground: #ffffff;
+
+  --secondary: #4c2d22; /* café profesional */
+  --secondary-foreground: #f5f9f2;
+
+  --muted: #e4f0e4; /* bg-muted */
+  --muted-foreground: #7e7e7e; /* gris oscuro suave */
+
+  --accent: #e4a542; /* accent */
+  --accent-foreground: #1a1a1a;
+
+  --destructive: #ed8383; /* alerts */
+  --destructive-foreground: #ffffff;
+
+  --border: #dce8dc; /* borde verdoso suave */
+  --input: #dce8dc;
+  --ring: #80af80;
+
+  /* charts & sidebar los amarramos a tu brand */
+  --chart-1: #80af80;
+  --chart-2: #4c2d22;
+  --chart-3: #e4a542;
+  --chart-4: #c5daef;
+  --chart-5: #ed8383;
+
+  --sidebar: 120 25% 59%;  /* Sage green sidebar */
+  --sidebar-background: 120 25% 59%;  /* Sage green sidebar */
+  --sidebar-foreground: 0 0% 100%;
+  --sidebar-primary: 0 0% 100%;
+  --sidebar-primary-foreground: 120 25% 59%;
+  --sidebar-accent: 120 25% 65%;
+  --sidebar-accent-foreground: 0 0% 100%;
+  --sidebar-border: 120 25% 55%;
+  --sidebar-ring: 38 65% 58%;
+}
+
+/* ===== Dark theme AdPaws ===== */
+/* Activado con la clase .dark en <html> */
+
+.dark {
+  --background: #121613; /* verde muy oscuro */
+  --foreground: #f5f9f2;
+
+  --card: #181d19;
+  --card-foreground: #f5f9f2;
+
+  --popover: #181d19;
+  --popover-foreground: #f5f9f2;
+
+  --primary: #80af80;
+  --primary-foreground: #121613;
+
+  --secondary: #c8afa9;
+  --secondary-foreground: #121613;
+
+  --muted: #202720;
+  --muted-foreground: #dce8dc;
+
+  --accent: #e4a542;
+  --accent-foreground: #121613;
+
+  --destructive: #ed8383;
+  --destructive-foreground: #121613;
+
+  --border: #202720;
+  --input: #202720;
+  --ring: #80af80;
+
+  --chart-1: #80af80;
+  --chart-2: #c5daef;
+  --chart-3: #e4a542;
+  --chart-4: #ed8383;
+  --chart-5: #f5f9f2;
+
+  --sidebar: #181d19;
+  --sidebar-foreground: #f5f9f2;
+  --sidebar-primary: #80af80;
+  --sidebar-primary-foreground: #121613;
+  --sidebar-accent: #e4a542;
+  --sidebar-accent-foreground: #121613;
+  --sidebar-border: #202720;
+  --sidebar-ring: #80af80;
+}
+
+/* Enlaces básicos */
+a {
+  font-weight: 500;
+  color: #4c2d22;
+  text-decoration: none;
+}
+a:hover {
+  color: #80af80;
+}
+
+/* Reseteo mínimo de body, el color ya lo maneja @layer base */
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+/* ===== Mapeo a Tailwind (@theme inline) ===== */
+/* Esto es lo que hace que puedas usar bg-background, text-foreground, etc. */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
+  --font-sans: var(--font-sans);
+  --font-heading: var(--font-heading);
+  --font-bookmania: var(--font-bookmania);
+}
+
+/* ===== Base layer para shadcn + Tailwind ===== */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
