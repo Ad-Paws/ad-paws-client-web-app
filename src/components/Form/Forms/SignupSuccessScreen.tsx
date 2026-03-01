@@ -18,7 +18,7 @@ const SignupSuccessScreen = ({ onGoHome }: SignupSuccessScreenProps) => {
   };
 
   return (
-    <div className="min-h-dvh w-full bg-[#f5f7f2] flex flex-col">
+    <div className="min-h-dvh w-full bg-background flex flex-col">
       {/* Main content centered */}
       <main className="flex-1 flex flex-col items-center justify-center px-6 pb-8">
         {/* Success Icon */}
@@ -27,7 +27,7 @@ const SignupSuccessScreen = ({ onGoHome }: SignupSuccessScreenProps) => {
         </div>
 
         {/* Title */}
-        <h1 className="text-3xl font-bold text-secondary font-bookmania mb-3 text-center">
+        <h1 className="text-3xl font-bold text-brandInfo-700 dark:text-brandAccent-400 font-bookmania mb-3 text-center">
           ¡Todo listo!
         </h1>
 
