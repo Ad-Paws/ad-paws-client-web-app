@@ -50,6 +50,7 @@ export const SERVICES_BY_COMPANY = gql`
       active
       companyId
       createdAt
+      status
     }
   }
 `;
@@ -79,6 +80,7 @@ export const SERVICES_BY_COMPANY_AND_TYPE = gql`
       companyId
       createdAt
       updatedAt
+      status
     }
   }
 `;

@@ -11,10 +11,11 @@ import { Button } from "@/components/ui/button";
 import { useForm } from "react-hook-form";
 import { cn, DOG_BREEDS } from "@/lib/utils";
 import { Plus, Trash2, Camera } from "lucide-react";
+import { FormDatePicker } from "../FormDatePicker";
 
 // Convert DOG_BREEDS object to SelectOption array
 const breedOptions: SelectOption[] = Object.entries(DOG_BREEDS).map(
-  ([value, label]) => ({ value, label })
+  ([value, label]) => ({ value, label }),
 );
 
 export interface DogFormValues {
@@ -26,7 +27,7 @@ export interface DogFormValues {
   size: "small" | "medium" | "large" | "xlarge" | "";
   gender: "male" | "female" | "";
   weight: string;
-  birthDate: string;
+  birthDate: Date | undefined;
 }
 
 interface SizeOption {
@@ -65,7 +66,7 @@ const emptyDogValues: Omit<DogFormValues, "id"> = {
   size: "",
   gender: "",
   weight: "",
-  birthDate: "",
+  birthDate: undefined,
 };
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
@@ -80,7 +81,7 @@ const ClientSignupStep2Form = ({
 
   const form = useForm<Omit<DogFormValues, "id">>({
     defaultValues: emptyDogValues,
-    mode: "onChange",
+    mode: "onBlur",
   });
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -170,7 +171,7 @@ const ClientSignupStep2Form = ({
       <Form
         form={form}
         onSubmit={handleAddDog}
-        className="flex flex-col gap-6 w-full rounded-md bg-white p-4"
+        className="flex flex-col gap-6 w-full rounded-md bg-white dark:bg-brand-900 p-4"
       >
         <FieldSet className="gap-5">
           {/* Photo upload */}
@@ -203,11 +204,11 @@ const ClientSignupStep2Form = ({
           <FormField
             name="name"
             rules={{
-              required: "El nombre es requerido",
+              required: "El nombre de tu peludo es requerido",
             }}
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Nombre</FormLabel>
+                <FormLabel className="px-4">Nombre</FormLabel>
                 <FormControl>
                   <Input placeholder="ej. Buddy" {...field} />
                 </FormControl>
@@ -224,7 +225,7 @@ const ClientSignupStep2Form = ({
             }}
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Raza</FormLabel>
+                <FormLabel className="px-4">Raza</FormLabel>
                 <FormControl>
                   <FormSelect
                     placeholder="Selecciona una raza"
@@ -246,7 +247,7 @@ const ClientSignupStep2Form = ({
             }}
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Color</FormLabel>
+                <FormLabel className="px-4">Color</FormLabel>
                 <FormControl>
                   <Input placeholder="ej. Dorado" {...field} />
                 </FormControl>
@@ -263,7 +264,7 @@ const ClientSignupStep2Form = ({
             }}
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Tamaño</FormLabel>
+                <FormLabel className="px-4">Tamaño</FormLabel>
                 <FormControl>
                   <div className="grid grid-cols-2 gap-2">
                     {sizeOptions.map((option) => (
@@ -276,7 +277,7 @@ const ClientSignupStep2Form = ({
                           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                           field.value === option.value
                             ? "bg-secondary text-secondary-foreground border-secondary"
-                            : "bg-card border-border text-foreground hover:bg-muted"
+                            : "bg-card border-border text-foreground hover:bg-muted",
                         )}
                       >
                         {option.label}
@@ -298,7 +299,7 @@ const ClientSignupStep2Form = ({
               }}
               render={({ field }) => (
                 <FormItem className="flex-1">
-                  <FormLabel>Género</FormLabel>
+                  <FormLabel className="px-4">Género</FormLabel>
                   <FormControl>
                     <div className="flex gap-2">
                       {genderOptions.map((option) => (
@@ -307,11 +308,11 @@ const ClientSignupStep2Form = ({
                           type="button"
                           onClick={() => field.onChange(option.value)}
                           className={cn(
-                            "flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all border",
+                            "flex-1 h-12 px-3 py-2 rounded-md text-sm font-medium transition-all border",
                             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                             field.value === option.value
                               ? "bg-secondary text-secondary-foreground border-secondary"
-                              : "bg-card border-border text-foreground hover:bg-muted"
+                              : "bg-card border-border text-foreground hover:bg-muted",
                           )}
                         >
                           {option.label}
@@ -335,7 +336,7 @@ const ClientSignupStep2Form = ({
               }}
               render={({ field }) => (
                 <FormItem className="flex-1">
-                  <FormLabel>Peso (kg)</FormLabel>
+                  <FormLabel className="px-4">Peso (kg)</FormLabel>
                   <FormControl>
                     <Input
                       type="text"
@@ -357,13 +358,14 @@ const ClientSignupStep2Form = ({
               required: "La fecha de nacimiento es requerida",
             }}
             render={({ field }) => (
-              <FormItem>
-                <FormLabel>Fecha de nacimiento</FormLabel>
+              <FormItem className="flex-1">
+                <FormLabel className="px-4">Fecha de nacimiento</FormLabel>
                 <FormControl>
-                  <Input
-                    type="date"
-                    max={new Date().toISOString().split("T")[0]}
-                    {...field}
+                  <FormDatePicker
+                    value={field.value ? new Date(field.value) : undefined}
+                    onChange={field.onChange}
+                    maxDate={new Date()}
+                    dateFormat="dd/MM/yyyy"
                   />
                 </FormControl>
                 <FormMessage />

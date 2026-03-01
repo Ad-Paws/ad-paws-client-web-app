@@ -33,8 +33,8 @@ const SignupSuccessScreen = ({ onGoHome }: SignupSuccessScreenProps) => {
 
         {/* Subtitle */}
         <p className="text-muted-foreground text-center max-w-xs leading-relaxed">
-          Tu cuenta ha sido creada exitosamente. Vamos a encontrar la estancia
-          perfecta para tu amigo peludo.
+          Revisa tu correo y confirma tu cuenta para empezar a cuidar a tu mejor
+          amigo.
         </p>
       </main>
 
@@ -54,4 +54,3 @@ const SignupSuccessScreen = ({ onGoHome }: SignupSuccessScreenProps) => {
 };
 
 export default SignupSuccessScreen;
-

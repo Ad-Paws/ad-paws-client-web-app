@@ -30,7 +30,7 @@ interface DaycareFormProps {
   dogId: string;
   companyId: number;
   onSuccess: (
-    reservation: CreateReservationResponse["createReservation"]
+    reservation: CreateReservationResponse["createReservation"],
   ) => void;
   onCancel: () => void;
   onBack: () => void;
@@ -47,7 +47,7 @@ export function DaycareForm({
 }: DaycareFormProps) {
   const [createReservation, { loading: isSubmitting, error: mutationError }] =
     useMutation<CreateReservationResponse, CreateReservationVariables>(
-      CREATE_RESERVATION
+      CREATE_RESERVATION,
     );
 
   const form = useForm<CheckInFormValues>({
@@ -75,7 +75,7 @@ export function DaycareForm({
   const selectedService = services.find(
     (s) =>
       s.id === selectedServiceId ||
-      (services.length === 1 && s.id === services[0].id)
+      (services.length === 1 && s.id === services[0].id),
   );
 
   // Calculate total
@@ -98,7 +98,7 @@ export function DaycareForm({
 
   const toggleAdditionalService = (
     serviceId: string,
-    currentServices: string[]
+    currentServices: string[],
   ) => {
     if (currentServices.includes(serviceId)) {
       return currentServices.filter((id) => id !== serviceId);
@@ -263,7 +263,7 @@ export function DaycareForm({
                         checked={field.value.includes(addon.id)}
                         onCheckedChange={() =>
                           field.onChange(
-                            toggleAdditionalService(addon.id, field.value)
+                            toggleAdditionalService(addon.id, field.value),
                           )
                         }
                         className="data-[state=checked]:bg-[#A3C585] data-[state=checked]:border-[#A3C585]"
@@ -303,14 +303,6 @@ export function DaycareForm({
 
       {/* Actions */}
       <div className="flex gap-3 pt-2">
-        <Button
-          type="button"
-          variant="outline"
-          className="flex-1 rounded-full"
-          onClick={onBack}
-        >
-          Atrás
-        </Button>
         <Button
           type="submit"
           className="flex-1 rounded-full bg-[#3D2E1E] hover:bg-[#2D1E0E] text-white"

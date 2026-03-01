@@ -23,13 +23,14 @@ export function PublicRoute({ children, redirectTo = "/" }: PublicRouteProps) {
   }
 
   // Redirect to home or specified route if already authenticated
-  if (isAuthenticated) {
+  if (isAuthenticated && location.pathname !== "/auth/verificar-cuenta") {
     // Get the location they were trying to access before being redirected to login
-    const from = (location.state as { from?: { pathname: string } })?.from?.pathname || redirectTo;
+    const from =
+      (location.state as { from?: { pathname: string } })?.from?.pathname ||
+      redirectTo;
     return <Navigate to={from} replace />;
   }
 
   // User is not authenticated, render children (login/register pages)
   return <>{children}</>;
 }
-

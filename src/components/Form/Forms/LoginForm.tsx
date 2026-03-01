@@ -2,13 +2,18 @@ import React from "react";
 import { Form } from "@/components/Form/Form";
 import { FieldSet } from "@/components/ui/field";
 import { FormItem } from "@/components/Form";
-import { FormLabel } from "@/components/Form";
 import { FormControl } from "@/components/Form";
 import { FormMessage } from "@/components/Form";
 import { FormField } from "@/components/Form";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import { useForm } from "react-hook-form";
+import { Link } from "react-router-dom";
+import { Mail, Lock } from "lucide-react";
 
 interface LoginFormValues {
   email: string;
@@ -27,7 +32,7 @@ export default function LoginForm({
       email: "",
       password: "",
     },
-    mode: "onChange",
+    mode: "onBlur",
   });
 
   return (
@@ -36,21 +41,33 @@ export default function LoginForm({
         <FormField
           name="email"
           rules={{
-            required: "El email es requerido",
+            required: "Ingresa tu email",
             pattern: {
               value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-              message: "Email inválido",
+              message: "Ingresa un email válido",
             },
           }}
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Email</FormLabel>
-              <FormControl>
-                <Input type="email" placeholder="Ingresa tu email" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          render={({ field, fieldState }) => {
+            console.log("field", field);
+            console.log("fieldState", fieldState);
+            return (
+              <FormItem>
+                <FormControl>
+                  <InputGroup>
+                    <InputGroupAddon>
+                      <Mail className="dark:text-white/80 text-black" />
+                    </InputGroupAddon>
+                    <InputGroupInput
+                      type="email"
+                      placeholder="Ingresa tu email"
+                      {...field}
+                    />
+                  </InputGroup>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            );
+          }}
         />
 
         <FormField
@@ -60,13 +77,17 @@ export default function LoginForm({
           }}
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Contraseña</FormLabel>
               <FormControl>
-                <Input
-                  type="password"
-                  placeholder="Ingresa tu contraseña"
-                  {...field}
-                />
+                <InputGroup>
+                  <InputGroupAddon>
+                    <Lock className="dark:text-white/80 text-black" />
+                  </InputGroupAddon>
+                  <InputGroupInput
+                    type="password"
+                    placeholder="Ingresa tu contraseña"
+                    {...field}
+                  />
+                </InputGroup>
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -84,6 +105,14 @@ export default function LoginForm({
       >
         {form.formState.isSubmitting ? "Iniciando sesión..." : "Inicia sesión"}
       </Button>
+      <div className="flex justify-center">
+        <Link
+          to="/registro-cliente"
+          className="text-sm font-medium text-secondary"
+        >
+          ¿No tienes una cuenta? Regístrate
+        </Link>
+      </div>
     </Form>
   );
 }

@@ -39,7 +39,7 @@ export const FormDatePicker = React.forwardRef<
       dateFormat = "PPP",
       locale = es,
     },
-    ref
+    ref,
   ) => {
     const { error, formItemId, formDescriptionId, formMessageId } =
       useFormField();
@@ -69,9 +69,9 @@ export const FormDatePicker = React.forwardRef<
             className={cn(
               // Base input styles
               "flex w-full items-center gap-2 rounded-md border px-3 py-2 text-sm text-left",
-              "h-9 min-w-0 shadow-xs transition-[color,box-shadow] outline-none",
+              "h-12 min-w-0 shadow-xs transition-[color,box-shadow] outline-none",
               // Colors matching input
-              "bg-[#F9FAFB] border-[#F3F4F6]",
+              "bg-input border-[#F3F4F6]",
               "dark:bg-input/30 dark:border-input",
               // Focus states
               "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
@@ -83,7 +83,7 @@ export const FormDatePicker = React.forwardRef<
               !value && "text-[#9CA3AF]",
               // Cursor
               "cursor-pointer",
-              className
+              className,
             )}
           >
             <CalendarIcon className="h-4 w-4 shrink-0 text-[#9CA3AF]" />
@@ -111,7 +111,7 @@ export const FormDatePicker = React.forwardRef<
         </PopoverContent>
       </Popover>
     );
-  }
+  },
 );
 
 FormDatePicker.displayName = "FormDatePicker";

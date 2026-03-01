@@ -6,131 +6,145 @@
 /* ====== CONFIG GLOBAL ====== */
 
 :root {
-  /* Fuentes base */
+  /* ===== Base ===== */
   --font-sans: "sofia-pro", system-ui, sans-serif;
   --font-heading: "sofia-pro", system-ui, sans-serif;
   --font-bookmania: "bookmania", system-ui, sans-serif;
 
-  line-height: 1.5;
-  font-weight: 400;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  /* radio base para shadcn */
   --radius: 0.75rem;
 
-  /* ===== Light theme AdPaws ===== */
-  /* Colores base (hex) */
-  --background: #E4F0E4; /* bg-soft */
-  --foreground: #1a1a1a; /* negro suave */
+  /* ===== Light theme ===== */
 
+  /* Background & Typography */
+  --background: #fff9ee;
+  --foreground: #1c3936;
+
+  /* Surfaces */
   --card: #ffffff;
-  --card-foreground: #1a1a1a;
+  --card-foreground: #1c3936;
 
   --popover: #ffffff;
-  --popover-foreground: #1a1a1a;
+  --popover-foreground: #1c3936;
 
-  --primary: #80af80; /* primario */
+  /* Brand Actions */
+  --primary: #39726b;
   --primary-foreground: #ffffff;
 
-  --secondary: #4c2d22; /* café profesional */
-  --secondary-foreground: #f5f9f2;
+  --secondary: #4d67a3;
+  --secondary-foreground: #ffffff;
 
-  --muted: #e4f0e4; /* bg-muted */
-  --muted-foreground: #7e7e7e; /* gris oscuro suave */
-
-  --accent: #e4a542; /* accent */
+  --accent: #e5a95d;
   --accent-foreground: #1a1a1a;
 
-  --destructive: #ed8383; /* alerts */
+  --destructive: #c06c86;
   --destructive-foreground: #ffffff;
 
-  --border: #dce8dc; /* borde verdoso suave */
-  --input: #dce8dc;
-  --ring: #80af80;
+  /* Neutral UI */
+  --muted: #f3efe6;
+  --muted-foreground: #6b7280;
 
-  /* charts & sidebar los amarramos a tu brand */
-  --chart-1: #80af80;
-  --chart-2: #4c2d22;
-  --chart-3: #e4a542;
-  --chart-4: #c5daef;
-  --chart-5: #ed8383;
+  --border: #e5ddd0;
+  --input: #e5ddd0;
+  --ring: #39726b;
 
-  --sidebar: 120 25% 59%;  /* Sage green sidebar */
-  --sidebar-background: 120 25% 59%;  /* Sage green sidebar */
-  --sidebar-foreground: 0 0% 100%;
-  --sidebar-primary: 0 0% 100%;
-  --sidebar-primary-foreground: 120 25% 59%;
-  --sidebar-accent: 120 25% 65%;
-  --sidebar-accent-foreground: 0 0% 100%;
-  --sidebar-border: 120 25% 55%;
-  --sidebar-ring: 38 65% 58%;
+  /* Badges */
+  --badge-success: #d7ebe8;
+  --badge-success-foreground: #264c47;
+
+  --badge-warning: #fae8cd;
+  --badge-warning-foreground: #5e3e1b;
+
+  --badge-danger: #f9dde8;
+  --badge-danger-foreground: #653646;
+
+  /* Charts */
+  --chart-1: #39726b;
+  --chart-2: #4d67a3;
+  --chart-3: #e5a95d;
+  --chart-4: #c06c86;
+  --chart-5: #1c3936;
+
+  /* Sidebar */
+  --sidebar: #eff6f5;
+  --sidebar-background: #eff6f5;
+  --sidebar-foreground: #1c3936;
+
+  --sidebar-primary: #39726b;
+  --sidebar-primary-foreground: #ffffff;
+
+  --sidebar-accent: #e5a95d;
+  --sidebar-accent-foreground: #1a1a1a;
+
+  --sidebar-border: #d7ebe8;
+  --sidebar-ring: #39726b;
 }
 
-/* ===== Dark theme AdPaws ===== */
+/* ===== Dark theme ===== */
 /* Activado con la clase .dark en <html> */
 
 .dark {
-  --background: #121613; /* verde muy oscuro */
-  --foreground: #f5f9f2;
+  --background: #263c3d;
+  --foreground: #fefae9;
 
-  --card: #181d19;
-  --card-foreground: #f5f9f2;
+  --card: #2f4b4c;
+  --card-foreground: #fefae9;
 
-  --popover: #181d19;
-  --popover-foreground: #f5f9f2;
+  --popover: #2f4b4c;
+  --popover-foreground: #fefae9;
 
-  --primary: #80af80;
-  --primary-foreground: #121613;
+  --primary: #39726b;
+  --primary-foreground: #ffffff;
 
-  --secondary: #c8afa9;
-  --secondary-foreground: #121613;
+  --secondary: #4d67a3;
+  --secondary-foreground: #ffffff;
 
-  --muted: #202720;
-  --muted-foreground: #dce8dc;
+  --accent: #e5a95d;
+  --accent-foreground: #1a1a1a;
 
-  --accent: #e4a542;
-  --accent-foreground: #121613;
+  --destructive: #c06c86;
+  --destructive-foreground: #ffffff;
 
-  --destructive: #ed8383;
-  --destructive-foreground: #121613;
+  --muted: #355556;
+  --muted-foreground: #d8d3c3;
 
-  --border: #202720;
-  --input: #202720;
-  --ring: #80af80;
+  --border: #355556;
+  --input: #355556;
+  --ring: #39726b;
 
-  --chart-1: #80af80;
-  --chart-2: #c5daef;
-  --chart-3: #e4a542;
-  --chart-4: #ed8383;
-  --chart-5: #f5f9f2;
+  --badge-success: #39726b;
+  --badge-success-foreground: #ffffff;
 
-  --sidebar: #181d19;
-  --sidebar-foreground: #f5f9f2;
-  --sidebar-primary: #80af80;
-  --sidebar-primary-foreground: #121613;
-  --sidebar-accent: #e4a542;
-  --sidebar-accent-foreground: #121613;
-  --sidebar-border: #202720;
-  --sidebar-ring: #80af80;
+  --badge-warning: #e5a95d;
+  --badge-warning-foreground: #1a1a1a;
+
+  --badge-danger: #c06c86;
+  --badge-danger-foreground: #ffffff;
+
+  --chart-1: #39726b;
+  --chart-2: #4d67a3;
+  --chart-3: #e5a95d;
+  --chart-4: #c06c86;
+  --chart-5: #fefae9;
+
+  --sidebar: #1f3233;
+  --sidebar-background: #1f3233;
+  --sidebar-foreground: #fefae9;
+
+  --sidebar-primary: #39726b;
+  --sidebar-primary-foreground: #ffffff;
+
+  --sidebar-accent: #e5a95d;
+  --sidebar-accent-foreground: #1a1a1a;
+
+  --sidebar-border: #355556;
+  --sidebar-ring: #39726b;
 }
 
-/* Enlaces básicos */
-a {
-  font-weight: 500;
-  color: #4c2d22;
-  text-decoration: none;
-}
-a:hover {
-  color: #80af80;
-}
 
 /* Reseteo mínimo de body, el color ya lo maneja @layer base */
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
 }
 
 /* ===== Mapeo a Tailwind (@theme inline) ===== */
@@ -168,6 +182,67 @@ body {
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  /* Brand palettes */
+  --color-brand-50: #eff6f5;
+  --color-brand-100: #d7ebe8;
+  --color-brand-200: #b0d6d0;
+  --color-brand-300: #88c2b8;
+  --color-brand-400: #61ad9f;
+  --color-brand-500: #39726b;
+  --color-brand-600: #2f5f59;
+  --color-brand-700: #264c47;
+  --color-brand-800: #1c3936;
+  --color-brand-900: #132625;
+
+  --color-brandSecondary-50: #f6f1ef;
+  --color-brandSecondary-100: #eadfd9;
+  --color-brandSecondary-200: #d3bcb1;
+  --color-brandSecondary-300: #bc9989;
+  --color-brandSecondary-400: #a57561;
+  --color-brandSecondary-500: #3a2823;
+  --color-brandSecondary-600: #2f201c;
+  --color-brandSecondary-700: #241816;
+  --color-brandSecondary-800: #191110;
+  --color-brandSecondary-900: #0f0a0a;
+
+  --color-brandAccent-50: #fdf6ec;
+  --color-brandAccent-100: #fae8cd;
+  --color-brandAccent-200: #f4d19d;
+  --color-brandAccent-300: #eebb6d;
+  --color-brandAccent-400: #e8b05f;
+  --color-brandAccent-500: #e5a95d;
+  --color-brandAccent-600: #c78f4a;
+  --color-brandAccent-700: #a87538;
+  --color-brandAccent-800: #8a5c28;
+  --color-brandAccent-900: #5e3e1b;
+
+  --color-brandInfo-50: #f3f6fd;
+  --color-brandInfo-100: #e3e9fb;
+  --color-brandInfo-200: #c6d3f6;
+  --color-brandInfo-300: #a8bef1;
+  --color-brandInfo-400: #8ba8ec;
+  --color-brandInfo-500: #4d67a3;
+  --color-brandInfo-600: #3f5586;
+  --color-brandInfo-700: #32436a;
+  --color-brandInfo-800: #25314e;
+  --color-brandInfo-900: #191f33;
+
+  --color-brandAlert-50: #fdf2f6;
+  --color-brandAlert-100: #f9dde8;
+  --color-brandAlert-200: #f3b9d1;
+  --color-brandAlert-300: #ec94b9;
+  --color-brandAlert-400: #e76e9f;
+  --color-brandAlert-500: #c06c86;
+  --color-brandAlert-600: #a25a71;
+  --color-brandAlert-700: #84485c;
+  --color-brandAlert-800: #653646;
+  --color-brandAlert-900: #472432;
+
+  --color-brandBg-soft: #fff9ee;
+  --color-brandBg-muted: #263c3d;
+  --color-brandBg-surface: #2f4b4c;
+  --color-brandBg-sidebar: #1f3233;
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);

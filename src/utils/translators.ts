@@ -1,8 +1,9 @@
 import type { DogFormValues } from "@/components/Form/Forms/ClientSignupStep2Form";
 
 export const translateDogFormToBody = (dog: DogFormValues, ownerId: number) => {
-  return {
-    birthDate: dog.birthDate,
+  console.log("Dog to translate:", dog);
+  const dogTranslated = {
+    birthDate: dog.birthDate?.toISOString(),
     ownerId: ownerId,
     size: dog.size as "SMALL" | "MEDIUM" | "LARGE" | "GIGANTIC",
     gender: dog.gender as "Male" | "Female",
@@ -12,4 +13,6 @@ export const translateDogFormToBody = (dog: DogFormValues, ownerId: number) => {
     name: dog.name,
     picture: dog.photo,
   };
+  console.log("Dog translated:", dogTranslated);
+  return dogTranslated;
 };

@@ -48,6 +48,15 @@ export const CREATE_USER_CLIENT = gql`
   }
 `;
 
+export const VERIFY_EMAIL_MUTATION = gql`
+  mutation VerifyEmail($token: String!) {
+    verifyEmail(token: $token) {
+      accessToken
+      refreshToken
+    }
+  }
+`;
+
 export const GET_OWNERS_QUERY = gql`
   query CompanyDogOwners($companyId: Int) {
     companyDogOwners(companyId: $companyId) {

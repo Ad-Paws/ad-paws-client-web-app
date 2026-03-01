@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import LoginForm from "@/components/Form/Forms/LoginForm";
 import Logo from "@/components/Logo";
 import { useAuth } from "@/contexts/AuthContext";
+import { Card } from "@/components/ui/card";
 
 interface LoginFormValues {
   email: string;
@@ -52,18 +53,13 @@ export default function Login() {
   }, [data, login, navigate, location]);
 
   return (
-    <div className="w-full max-w-[400px] border border-border rounded-lg p-6 bg-card">
-      <div className="flex items-center justify-center mb-4">
+    <Card className="w-full max-w-9/10 md:max-w-[400px] border border-border rounded-lg p-6 bg-white dark:bg-brand-900 text-black">
+      <div className="flex items-center justify-center">
         <Logo className="w-48" />
       </div>
-      <div className="mb-6">
-        <p className="text-2xl font-bold text-center mb-2">
-          Incia sesión en tu cuenta
-        </p>
-        <p className="text-sm text-center text-muted-foreground font-medium">
-          ¡Bienvenido de nuevo!
-        </p>
-      </div>
+      <p className="text-2xl font-bold text-center text-black dark:text-white">
+        ¡Bienvenido de nuevo!
+      </p>
       {error && (
         <div className="mb-4 p-3 rounded-md bg-destructive/10 border border-destructive/20">
           <p className="text-sm text-destructive text-center">
@@ -72,6 +68,6 @@ export default function Login() {
         </div>
       )}
       <LoginForm onSubmit={onSubmit} loading={loading} />
-    </div>
+    </Card>
   );
 }

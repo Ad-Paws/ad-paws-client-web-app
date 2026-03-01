@@ -53,7 +53,7 @@ const ClientSignupStep1Form = ({
       phone: "",
       ...defaultValues,
     },
-    mode: "onChange",
+    mode: "onBlur",
   });
 
   return (
@@ -71,8 +71,8 @@ const ClientSignupStep1Form = ({
               required: "El nombre es requerido",
             }}
             render={({ field }) => (
-              <FormItem className="flex-1">
-                <FormLabel>Nombre</FormLabel>
+              <FormItem className="flex-1 gap-2">
+                <FormLabel className="px-4">Nombre</FormLabel>
                 <FormControl>
                   <Input placeholder="ej. María" {...field} />
                 </FormControl>
@@ -87,8 +87,8 @@ const ClientSignupStep1Form = ({
               required: "El apellido es requerido",
             }}
             render={({ field }) => (
-              <FormItem className="flex-1">
-                <FormLabel>Apellido</FormLabel>
+              <FormItem className="flex-1 gap-2">
+                <FormLabel className="px-4">Apellido</FormLabel>
                 <FormControl>
                   <Input placeholder="ej. García" {...field} />
                 </FormControl>
@@ -106,7 +106,7 @@ const ClientSignupStep1Form = ({
           }}
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Fecha de nacimiento</FormLabel>
+              <FormLabel className="px-4">Fecha de nacimiento</FormLabel>
               <FormControl>
                 <FormDatePicker
                   placeholder="dd/mm/aaaa"
@@ -128,8 +128,8 @@ const ClientSignupStep1Form = ({
             required: "Por favor selecciona un género",
           }}
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>Género</FormLabel>
+            <FormItem className="gap-2">
+              <FormLabel className="px-4">Género</FormLabel>
               <FormControl>
                 <div className="flex gap-2">
                   {genderOptions.map((option) => (
@@ -138,11 +138,11 @@ const ClientSignupStep1Form = ({
                       type="button"
                       onClick={() => field.onChange(option.value)}
                       className={cn(
-                        "px-5 py-2 rounded-md text-sm font-medium transition-all border",
+                        "h-12 px-5 rounded-md text-sm font-medium transition-all border",
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                         field.value === option.value
                           ? "bg-secondary text-secondary-foreground border-secondary"
-                          : "bg-card border-border text-foreground hover:bg-muted"
+                          : "bg-card border-border text-foreground hover:bg-muted",
                       )}
                     >
                       {option.label}
@@ -166,8 +166,8 @@ const ClientSignupStep1Form = ({
             },
           }}
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>Correo electrónico</FormLabel>
+            <FormItem className="gap-2">
+              <FormLabel className="px-4">Correo electrónico</FormLabel>
               <FormControl>
                 <Input
                   type="email"
@@ -191,8 +191,8 @@ const ClientSignupStep1Form = ({
             },
           }}
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>Contraseña</FormLabel>
+            <FormItem className="gap-2">
+              <FormLabel className="px-4">Contraseña</FormLabel>
               <FormControl>
                 <Input
                   type="password"
@@ -216,8 +216,8 @@ const ClientSignupStep1Form = ({
             },
           }}
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>Número de teléfono</FormLabel>
+            <FormItem className="gap-2">
+              <FormLabel className="px-4">Número de teléfono</FormLabel>
               <FormControl>
                 <Input type="tel" placeholder="(55) 1234-5678" {...field} />
               </FormControl>

@@ -10,6 +10,7 @@ import DogProfile from "./pages/guests/DogProfile";
 import Owners from "./pages/owners/Owners";
 import Services from "./pages/services/Services";
 import ClientSignup from "./pages/authentication/ClientSignup";
+import VerifyEmail from "./pages/authentication/VerifyEmail";
 
 export const routes = createBrowserRouter([
   {
@@ -91,6 +92,10 @@ export const routes = createBrowserRouter([
       {
         path: "login",
         Component: Login,
+      },
+      {
+        path: "verificar-cuenta",
+        Component: VerifyEmail,
       },
     ],
   },

@@ -2,6 +2,7 @@
 import * as React from "react";
 import {
   Controller,
+  useFormState,
   type ControllerProps,
   type FieldPath,
   type FieldValues,
@@ -13,32 +14,33 @@ import { cn } from "@/lib/utils";
 
 type FormFieldContextValue<
   TFieldValues extends FieldValues = FieldValues,
-  TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>
+  TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
 > = {
   name: TName;
 };
 
 const FormFieldContext = React.createContext<FormFieldContextValue>(
-  {} as FormFieldContextValue
+  {} as FormFieldContextValue,
 );
 
 export const useFormField = () => {
   const fieldContext = React.useContext(FormFieldContext);
-  const formContext = useFormContext();
-
-  const fieldState = formContext.getFieldState(
-    fieldContext.name,
-    formContext.formState
-  );
 
   if (!fieldContext) {
     throw new Error("useFormField should be used within <FormField>");
   }
 
-  const { id } = React.useId
-    ? // eslint-disable-next-line react-hooks/rules-of-hooks
-      { id: React.useId() }
-    : { id: fieldContext.name };
+  const formContext = useFormContext();
+  const id = React.useId();
+
+  // useFormState suscribe este componente a los cambios de estado del campo,
+  // garantizando re-renders correctos en modo onBlur/onChange
+  const { errors } = useFormState({
+    control: formContext.control,
+    name: fieldContext.name,
+  });
+
+  const error = errors[fieldContext.name];
 
   return {
     id,
@@ -46,13 +48,14 @@ export const useFormField = () => {
     formItemId: `${id}-form-item`,
     formDescriptionId: `${id}-form-item-description`,
     formMessageId: `${id}-form-item-message`,
-    ...fieldState,
+    invalid: !!error,
+    error,
   };
 };
 
 export const FormField = <
   TFieldValues extends FieldValues = FieldValues,
-  TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>
+  TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
 >({
   ...props
 }: ControllerProps<TFieldValues, TName>) => {
