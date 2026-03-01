@@ -43,7 +43,6 @@ export function DaycareForm({
   companyId,
   onSuccess,
   onCancel,
-  onBack,
 }: DaycareFormProps) {
   const [createReservation, { loading: isSubmitting, error: mutationError }] =
     useMutation<CreateReservationResponse, CreateReservationVariables>(
