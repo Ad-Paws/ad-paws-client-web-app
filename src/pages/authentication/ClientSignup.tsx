@@ -47,6 +47,7 @@ const ClientSignup = () => {
   const [formData, setFormData] = useState<SignupFormData>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [editingDogId, setEditingDogId] = useState<string | null>(null);
   const [createUserDogs] = useMutation(CREATE_USER_DOGS, {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onCompleted(data: any) {
@@ -80,14 +81,24 @@ const ClientSignup = () => {
     },
   });
 
+  const scrollToTop = () => {
+    const mainContent = document.getElementById("main-content");
+    if (mainContent) {
+      mainContent.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
   const handleStep1Submit = (data: ClientSignupStep1Values) => {
     setFormData((prev) => ({ ...prev, step1: data }));
     setCurrentStep(2);
+    scrollToTop();
   };
 
   const handleStep2Submit = (dogs: DogFormValues[]) => {
     setFormData((prev) => ({ ...prev, dogs }));
+    setEditingDogId(null);
     setCurrentStep(3);
+    scrollToTop();
   };
 
   const handleConfirm = async () => {
@@ -104,23 +115,27 @@ const ClientSignup = () => {
     } catch (error) {
       console.error("Error creating account:", error);
       setIsSubmitting(false);
+    } finally {
+      scrollToTop();
     }
   };
 
   const handleEditUserInfo = () => {
     setCurrentStep(1);
+    scrollToTop();
   };
 
   const handleEditDog = (dogId: string) => {
-    // Navigate to step 2 - the dog data is already stored in formData.dogs
-    console.log("Edit dog:", dogId);
+    setEditingDogId(dogId);
     setCurrentStep(2);
+    scrollToTop();
   };
 
   const handleBack = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
     }
+    scrollToTop();
   };
 
   const currentContent = stepContent[currentStep];
@@ -169,7 +184,10 @@ const ClientSignup = () => {
         </div>
       </div>
 
-      <main className="flex-1 min-h-0 overflow-y-auto px-6 pb-[calc(2rem+env(safe-area-inset-bottom))]">
+      <main
+        id="main-content"
+        className="flex-1 min-h-0 overflow-y-auto px-6 pb-[calc(2rem+env(safe-area-inset-bottom))]"
+      >
         <div className="mb-6 lg:mb-8">
           <h1 className="text-3xl font-bold text-brandInfo-700 dark:text-brandAccent-400 font-bookmania mb-2">
             {currentContent.title}
@@ -188,6 +206,7 @@ const ClientSignup = () => {
           <ClientSignupStep2Form
             onSubmit={handleStep2Submit}
             defaultDogs={formData.dogs}
+            editingDogId={editingDogId}
           />
         )}
 

@@ -5,13 +5,14 @@ import { FormField, FormItem } from "../FormField";
 import { FormLabel } from "../FormLabel";
 import { FormControl } from "../FormControl";
 import { FormMessage } from "../FormMessage";
-import { FormSelect, type SelectOption } from "../FormSelect";
+import { type SelectOption } from "../FormSelect";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useForm } from "react-hook-form";
 import { cn, DOG_BREEDS } from "@/lib/utils";
 import { Plus, Trash2, Camera } from "lucide-react";
 import { FormDatePicker } from "../FormDatePicker";
+import { FormCombobox } from "../FormCombobox";
 
 // Convert DOG_BREEDS object to SelectOption array
 const breedOptions: SelectOption[] = Object.entries(DOG_BREEDS).map(
@@ -55,6 +56,7 @@ const genderOptions: GenderOption[] = [
 interface ClientSignupStep2FormProps {
   onSubmit: (dogs: DogFormValues[]) => void;
   defaultDogs?: DogFormValues[];
+  editingDogId?: string | null;
   loading?: boolean;
 }
 
@@ -74,14 +76,27 @@ const generateId = () => Math.random().toString(36).substring(2, 9);
 const ClientSignupStep2Form = ({
   onSubmit,
   defaultDogs = [],
+  editingDogId = null,
   loading = false,
 }: ClientSignupStep2FormProps) => {
-  const [dogs, setDogs] = useState<DogFormValues[]>(defaultDogs);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const dogBeingEdited = editingDogId
+    ? defaultDogs.find((d) => d.id === editingDogId)
+    : undefined;
+
+  const [dogs, setDogs] = useState<DogFormValues[]>(
+    // Excluir el perro que se está editando de la lista para re-agregarlo al guardar
+    editingDogId
+      ? defaultDogs.filter((d) => d.id !== editingDogId)
+      : defaultDogs,
+  );
+  const [editingId, setEditingId] = useState<string | null>(editingDogId);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(
+    dogBeingEdited?.photo ? URL.createObjectURL(dogBeingEdited.photo) : null,
+  );
 
   const form = useForm<Omit<DogFormValues, "id">>({
-    defaultValues: emptyDogValues,
-    mode: "onBlur",
+    defaultValues: dogBeingEdited ? { ...dogBeingEdited } : emptyDogValues,
+    mode: "all",
   });
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -98,11 +113,12 @@ const ClientSignupStep2Form = ({
   };
 
   const handleAddDog = (data: Omit<DogFormValues, "id">) => {
-    const newDog: DogFormValues = {
+    const dog: DogFormValues = {
       ...data,
-      id: generateId(),
+      id: editingId ?? generateId(),
     };
-    setDogs((prev) => [...prev, newDog]);
+    setDogs((prev) => [...prev, dog]);
+    setEditingId(null);
     form.reset(emptyDogValues);
     setPhotoPreview(null);
   };
@@ -227,8 +243,10 @@ const ClientSignupStep2Form = ({
               <FormItem>
                 <FormLabel className="px-4">Raza</FormLabel>
                 <FormControl>
-                  <FormSelect
+                  <FormCombobox
                     placeholder="Selecciona una raza"
+                    searchPlaceholder="Buscar raza"
+                    emptyMessage="No se encontraron resultados"
                     options={breedOptions}
                     value={field.value}
                     onValueChange={field.onChange}
@@ -374,7 +392,7 @@ const ClientSignupStep2Form = ({
           />
         </FieldSet>
 
-        {/* Add another dog button */}
+        {/* Add / save dog button */}
         <Button
           type="submit"
           variant="outline"
@@ -382,7 +400,7 @@ const ClientSignupStep2Form = ({
           className="w-full border-dashed border-primary text-primary hover:bg-primary/5 rounded-full h-11"
         >
           <Plus className="w-4 h-4 mr-1" />
-          Agregar otro perro
+          {editingId ? "Guardar cambios" : "Agregar otro perro"}
         </Button>
       </Form>
 

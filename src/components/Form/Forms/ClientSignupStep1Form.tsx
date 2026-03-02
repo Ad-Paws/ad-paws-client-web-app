@@ -53,7 +53,7 @@ const ClientSignupStep1Form = ({
       phone: "",
       ...defaultValues,
     },
-    mode: "onBlur",
+    mode: "all",
   });
 
   return (
@@ -214,6 +214,9 @@ const ClientSignupStep1Form = ({
               value: /^[\d\s\-()+ ]+$/,
               message: "Número de teléfono inválido",
             },
+            validate: (value: string) =>
+              value.replace(/\D/g, "").length === 10 ||
+              "El número de teléfono debe tener 10 dígitos",
           }}
           render={({ field }) => (
             <FormItem className="gap-2">

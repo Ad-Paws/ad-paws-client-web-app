@@ -308,4 +308,7 @@ export const DOG_BREEDS = {
   wirehairedPointingGriffon: "Wirehaired Pointing Griffon",
   xoloitzcuintli: "Xoloitzcuintli",
   yorkshireTerrier: "Yorkshire Terrier",
+  mixedSmall: "Mestizo Chico",
+  mixedMedium: "Mestizo Mediano",
+  mixedLarge: "Mestizo Grande",
 } as const;

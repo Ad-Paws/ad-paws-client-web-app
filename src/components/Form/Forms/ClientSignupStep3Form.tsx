@@ -130,7 +130,7 @@ const ClientSignupStep3Form = ({
         type="button"
         size="lg"
         onClick={onConfirm}
-        // disabled={loading}
+        disabled={loading}
         className="w-full bg-accent hover:bg-accent/90 text-accent-foreground rounded-full h-12 text-base font-semibold mt-2"
       >
         {loading ? "Creando cuenta..." : "Confirmar y crear cuenta"}

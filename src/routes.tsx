@@ -32,6 +32,9 @@ export const routes = createBrowserRouter([
       {
         path: "",
         Component: Dashboard,
+        handle: {
+          title: "AdPaws | Inicio",
+        },
       },
     ],
   },

@@ -1,6 +1,7 @@
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface SignupSuccessScreenProps {
   onGoHome?: () => void;
@@ -8,11 +9,13 @@ interface SignupSuccessScreenProps {
 
 const SignupSuccessScreen = ({ onGoHome }: SignupSuccessScreenProps) => {
   const navigate = useNavigate();
+  const { login } = useAuth();
 
-  const handleGoHome = () => {
+  const handleGoHome = async () => {
     if (onGoHome) {
       onGoHome();
     } else {
+      await login();
       navigate("/inicio");
     }
   };

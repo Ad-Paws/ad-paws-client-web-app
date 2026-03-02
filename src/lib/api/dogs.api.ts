@@ -93,3 +93,14 @@ export const UPDATE_DOG = gql`
     }
   }
 `;
+
+export const GET_USER_DOGS = gql`
+  query UserDogs {
+    userDogs {
+      id
+      name
+      breed
+      imageUrl
+    }
+  }
+`;

@@ -12,6 +12,7 @@ import { StatsigProvider } from "@statsig/react-bindings";
 import { StatsigSessionReplayPlugin } from "@statsig/session-replay";
 import { StatsigAutoCapturePlugin } from "@statsig/web-analytics";
 import { StatsigWrapper } from "./components/StatsigWrapper";
+import { HelmetProvider } from "react-helmet-async";
 
 const STATSIG_CLIENT_KEY =
   import.meta.env.VITE_STATSIG_CLIENT_KEY ||
@@ -40,12 +41,14 @@ createRoot(document.getElementById("root")!).render(
           >
             <StatsigWrapper>
               <NiceModal.Provider>
-                <RouterProvider router={routes} />
+                <HelmetProvider>
+                  <RouterProvider router={routes} />
+                </HelmetProvider>
               </NiceModal.Provider>
             </StatsigWrapper>
           </StatsigProvider>
         </AuthProvider>
       </ApolloProvider>
     </ThemeProvider>
-  </StrictMode>
+  </StrictMode>,
 );
