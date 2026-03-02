@@ -5,12 +5,10 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { PublicRoute } from "./components/PublicRoute";
 import Dashboard from "./pages/dashboard/Dashboard";
 import DashboardLayout from "./layouts/DashboardLayout";
-import Guests from "./pages/guests/Guests";
-import DogProfile from "./pages/guests/DogProfile";
-import Owners from "./pages/owners/Owners";
-import Services from "./pages/services/Services";
 import ClientSignup from "./pages/authentication/ClientSignup";
 import VerifyEmail from "./pages/authentication/VerifyEmail";
+import Profile from "./pages/profile/Profile";
+import DogProfile from "./pages/dog/DogProfile";
 
 export const routes = createBrowserRouter([
   {
@@ -39,7 +37,7 @@ export const routes = createBrowserRouter([
     ],
   },
   {
-    path: "/visitantes-perrunos",
+    path: "/mis-perros/:dogId",
     element: (
       <ProtectedRoute>
         <DashboardLayout />
@@ -48,16 +46,12 @@ export const routes = createBrowserRouter([
     children: [
       {
         path: "",
-        Component: Guests,
-      },
-      {
-        path: ":dogId",
         Component: DogProfile,
       },
     ],
   },
   {
-    path: "/servicios",
+    path: "/perfil",
     element: (
       <ProtectedRoute>
         <DashboardLayout />
@@ -66,21 +60,7 @@ export const routes = createBrowserRouter([
     children: [
       {
         path: "",
-        Component: Services,
-      },
-    ],
-  },
-  {
-    path: "/propietarios",
-    element: (
-      <ProtectedRoute>
-        <DashboardLayout />
-      </ProtectedRoute>
-    ),
-    children: [
-      {
-        path: "",
-        Component: Owners,
+        Component: Profile,
       },
     ],
   },

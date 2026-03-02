@@ -57,6 +57,34 @@ export const VERIFY_EMAIL_MUTATION = gql`
   }
 `;
 
+export const USER_PROFILE_QUERY = gql`
+  query UserProfile {
+    user {
+      id
+      name
+      lastname
+      email
+      phone
+      gender
+      birthDate
+    }
+  }
+`;
+
+export const UPDATE_USER_MUTATION = gql`
+  mutation UpdateUser($input: UpdateUserInput!) {
+    updateUser(input: $input) {
+      id
+      name
+      lastname
+      email
+      phone
+      gender
+      birthDate
+    }
+  }
+`;
+
 export const GET_OWNERS_QUERY = gql`
   query CompanyDogOwners($companyId: Int) {
     companyDogOwners(companyId: $companyId) {

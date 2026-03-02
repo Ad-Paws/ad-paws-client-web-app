@@ -1,15 +1,10 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-interface Dog {
-  id: string;
-  name: string;
-  imageUrl?: string | null;
-}
+import type { Dog } from "@/types/Dog";
 
 interface DogAvatarProps {
-  dog: Dog;
+  dog: Partial<Dog>;
   size?: number;
   className?: string;
   onClick?: () => void;
@@ -30,7 +25,7 @@ export function DogAvatar({
   className,
   onClick,
 }: DogAvatarProps) {
-  const initials = getInitials(dog.name);
+  const initials = getInitials(dog.name ?? "");
 
   return (
     <button
@@ -66,8 +61,8 @@ export function DogAvatar({
 }
 
 interface DogAvatarListProps {
-  dogs: Dog[];
-  onDogPress?: (dog: Dog) => void;
+  dogs: Partial<Dog>[];
+  onDogPress?: (dog: Partial<Dog>) => void;
   className?: string;
 }
 

@@ -14,9 +14,7 @@ import { StatsigAutoCapturePlugin } from "@statsig/web-analytics";
 import { StatsigWrapper } from "./components/StatsigWrapper";
 import { HelmetProvider } from "react-helmet-async";
 
-const STATSIG_CLIENT_KEY =
-  import.meta.env.VITE_STATSIG_CLIENT_KEY ||
-  "client-MEUVgenA06nWlhyr4oSSidp0SJO2u6xiMZdwgPusW1l";
+const STATSIG_CLIENT_KEY = import.meta.env.VITE_NEXT_PUBLIC_STATSIG_CLIENT_KEY;
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
