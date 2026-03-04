@@ -1,5 +1,3 @@
-import logo from "@/assets/brand/logo_light.png";
-import logoDark from "@/assets/brand/logo_dark.png";
 import { cn } from "@/lib/utils";
 export default function Logo({
   className,
@@ -10,12 +8,12 @@ export default function Logo({
   return (
     <>
       <img
-        src={logo}
+        src={"https://adpaws.com.mx/emails/resources/Logo_AdPaws_color.png"}
         alt="Ad Paws Logo"
         className={cn(className, "dark:hidden")}
       />
       <img
-        src={logoDark}
+        src={"https://adpaws.com.mx/emails/resources/Logo_AdPaws_white.png"}
         alt="Ad Paws Logo"
         className={cn(className, "hidden dark:block")}
       />
