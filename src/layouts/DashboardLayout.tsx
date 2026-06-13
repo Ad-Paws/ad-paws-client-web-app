@@ -5,7 +5,7 @@ import BottomNav from "@/components/BottomNav";
 export default function DashboardLayout() {
   return (
     <div className="h-dvh w-full bg-background dark:bg-background-dark">
-      <main className={cn("h-full transition-all duration-300 ease-in-out")}>
+      <main className={cn("h-full transition-all duration-300 ease-in-out mx-auto w-[calc(100%-2rem)] max-w-md")}>
         <div className="h-full flex flex-col pb-24">
           <Outlet />
         </div>
