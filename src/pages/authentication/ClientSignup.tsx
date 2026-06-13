@@ -188,6 +188,7 @@ const ClientSignup = () => {
         id="main-content"
         className="flex-1 min-h-0 overflow-y-auto px-6 pb-[calc(2rem+env(safe-area-inset-bottom))]"
       >
+        <div className="sm:max-w-[600px] sm:mx-auto">
         <div className="mb-6 lg:mb-8">
           <h1 className="text-3xl font-bold text-brandInfo-700 dark:text-brandAccent-400 font-bookmania mb-2">
             {currentContent.title}
@@ -231,6 +232,7 @@ const ClientSignup = () => {
               Inicia sesión
             </Link>
           </span>
+        </div>
         </div>
       </main>
     </div>
