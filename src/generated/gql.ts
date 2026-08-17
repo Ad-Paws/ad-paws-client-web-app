@@ -18,12 +18,16 @@ type Documents = {
     "\n  query Dog($id: ID!) {\n    dog(id: $id) {\n      id\n      name\n      breed\n      birthDate\n      gender\n      color\n      size\n      weightKg\n      imageUrl\n      notes\n      primaryOwner {\n        id\n        name\n        lastname\n        email\n        phone\n      }\n    }\n  }\n": typeof types.DogDocument,
     "\n  query Me {\n    me {\n      id\n      email\n      name\n      lastname\n      phone\n      gender\n      birthDate\n      emailVerifiedAt\n      status\n    }\n  }\n": typeof types.MeDocument,
     "\n  query MyCompanies {\n    myCompanies {\n      id\n      name\n      logoUrl\n      slug\n      timezone\n      currency\n    }\n  }\n": typeof types.MyCompaniesDocument,
+    "\n  mutation SignInUser($input: SignInUserInput!) {\n    signUser(input: $input) {\n      accessToken\n      refreshToken\n    }\n  }\n": typeof types.SignInUserDocument,
+    "\n  mutation LogoutUser($refreshToken: String) {\n    logoutUser(refreshToken: $refreshToken) {\n      success\n    }\n  }\n": typeof types.LogoutUserDocument,
 };
 const documents: Documents = {
     "\n  query MyDogs {\n    myDogs {\n      id\n      name\n      breed\n      imageUrl\n    }\n  }\n": types.MyDogsDocument,
     "\n  query Dog($id: ID!) {\n    dog(id: $id) {\n      id\n      name\n      breed\n      birthDate\n      gender\n      color\n      size\n      weightKg\n      imageUrl\n      notes\n      primaryOwner {\n        id\n        name\n        lastname\n        email\n        phone\n      }\n    }\n  }\n": types.DogDocument,
     "\n  query Me {\n    me {\n      id\n      email\n      name\n      lastname\n      phone\n      gender\n      birthDate\n      emailVerifiedAt\n      status\n    }\n  }\n": types.MeDocument,
     "\n  query MyCompanies {\n    myCompanies {\n      id\n      name\n      logoUrl\n      slug\n      timezone\n      currency\n    }\n  }\n": types.MyCompaniesDocument,
+    "\n  mutation SignInUser($input: SignInUserInput!) {\n    signUser(input: $input) {\n      accessToken\n      refreshToken\n    }\n  }\n": types.SignInUserDocument,
+    "\n  mutation LogoutUser($refreshToken: String) {\n    logoutUser(refreshToken: $refreshToken) {\n      success\n    }\n  }\n": types.LogoutUserDocument,
 };
 
 /**
@@ -56,6 +60,14 @@ export function graphql(source: "\n  query Me {\n    me {\n      id\n      email
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query MyCompanies {\n    myCompanies {\n      id\n      name\n      logoUrl\n      slug\n      timezone\n      currency\n    }\n  }\n"): (typeof documents)["\n  query MyCompanies {\n    myCompanies {\n      id\n      name\n      logoUrl\n      slug\n      timezone\n      currency\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation SignInUser($input: SignInUserInput!) {\n    signUser(input: $input) {\n      accessToken\n      refreshToken\n    }\n  }\n"): (typeof documents)["\n  mutation SignInUser($input: SignInUserInput!) {\n    signUser(input: $input) {\n      accessToken\n      refreshToken\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation LogoutUser($refreshToken: String) {\n    logoutUser(refreshToken: $refreshToken) {\n      success\n    }\n  }\n"): (typeof documents)["\n  mutation LogoutUser($refreshToken: String) {\n    logoutUser(refreshToken: $refreshToken) {\n      success\n    }\n  }\n"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};

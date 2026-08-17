@@ -7,7 +7,9 @@ import React, {
   useCallback,
 } from "react";
 import { apolloClient } from "@/lib/api/apolloClient";
-import { LOGOUT_MUTATION, USER_QUERY } from "@/lib/api/user.api";
+import { USER_QUERY } from "@/lib/api/user.api";
+import { LOGOUT } from "@/graphql/user";
+import { clearSession, getRefreshToken, onSessionCleared } from "@/lib/session";
 
 // TODO(F1): el almacenamiento de sesión se reescribe con Bearer + refreshSession.
 const USER_DATA_KEY = "userData";
@@ -129,16 +131,34 @@ export function AuthProvider({ children }: AuthProviderProps) {
     [fetchUserData]
   );
 
-  // Logout function - clear local data (server will handle cookie removal)
+  /**
+   * Cierra sesión en este dispositivo.
+   *
+   * El refresh token va explícito: es lo que el servidor revoca. Si la llamada
+   * falla —red caída, token ya vencido— la sesión local se limpia igual: dejar
+   * al usuario "dentro" porque el servidor no contestó es la peor salida.
+   */
   const logout = useCallback(async () => {
-    // Clear local storage
     localStorage.removeItem(USER_DATA_KEY);
-    await apolloClient.mutate<{ logoutUser: { success: boolean } }>({
-      mutation: LOGOUT_MUTATION,
-    });
-    // Clear state
-    setUser(null);
+    try {
+      await apolloClient.mutate({
+        mutation: LOGOUT,
+        variables: { refreshToken: getRefreshToken() },
+      });
+    } catch (error) {
+      console.error("Logout request failed; clearing local session anyway", error);
+    } finally {
+      clearSession();
+      await apolloClient.clearStore();
+      setUser(null);
+    }
   }, []);
+
+  /**
+   * El link de errores puede invalidar la sesión sin pasar por aquí (un
+   * refresh que falla). Esto es lo que hace que la UI se entere.
+   */
+  useEffect(() => onSessionCleared(() => setUser(null)), []);
 
   // Update user function
   const updateUser = useCallback((userData: User) => {

@@ -44,6 +44,13 @@ export type AddressInput = {
   zip: Scalars['String']['input'];
 };
 
+/** A qué aplicación vuelve el usuario desde un correo. */
+export type AppAudience =
+  /** App del negocio. */
+  | 'BUSINESS'
+  /** App de clientes finales. */
+  | 'CLIENT';
+
 export type AuthResponse = {
   accessToken: Scalars['String']['output'];
   refreshToken: Scalars['String']['output'];
@@ -194,7 +201,17 @@ export type CreateServiceInput = {
 };
 
 export type CreateUserInput = {
+  /** Which app the signup came from. Decides where the verification email points. */
+  app?: InputMaybe<AppAudience>;
   birthDate?: InputMaybe<Scalars['DateTime']['input']>;
+  /**
+   * Links the account as a CLIENT of the business with that slug, in the same
+   * transaction that creates the user. Omitting it creates an account with no
+   * company — which is how a business owner signs up before `createCompany`.
+   *
+   * It can only ever produce a CLIENT membership. No public input decides a role.
+   */
+  companySlug?: InputMaybe<Scalars['String']['input']>;
   email: Scalars['String']['input'];
   gender?: InputMaybe<Gender>;
   lastname?: InputMaybe<Scalars['String']['input']>;
@@ -461,8 +478,27 @@ export type Mutation = {
   deactivatePackage: Package;
   deletePriceException: Scalars['Boolean']['output'];
   inviteMember: InviteMemberPayload;
+  /**
+   * Links the authenticated user as a CLIENT of the business with that slug.
+   *
+   * Idempotent: if they are already a client there it returns the existing
+   * membership instead of failing — retrying is not an error. A revoked
+   * membership is reactivated, so its history stays attached to the same row.
+   *
+   * `@auth` with no `requires`: the caller has no role in that company yet, which
+   * is the whole point.
+   */
+  joinCompany: CompanyMembership;
   /** Ends every session on every device. */
   logoutAllSessions: LogoutResponse;
+  /**
+   * Ends the session on THIS device.
+   *
+   * With a cookie it destroys the session; with a bearer token it revokes the
+   * refresh token presented. Sending both is valid and is what a client that
+   * supports both does. Previously this required an express session, so a
+   * bearer-only client could never sign out.
+   */
   logoutUser: LogoutResponse;
   /**
    * Records that payment was taken outside the platform (the business's card
@@ -615,6 +651,16 @@ export type MutationDeletePriceExceptionArgs = {
 
 export type MutationInviteMemberArgs = {
   input: InviteMemberInput;
+};
+
+
+export type MutationJoinCompanyArgs = {
+  slug: Scalars['String']['input'];
+};
+
+
+export type MutationLogoutUserArgs = {
+  refreshToken?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -804,6 +850,21 @@ export type PricingUnit =
   | 'PACKAGE'
   | 'SESSION';
 
+/**
+ * Public face of a business: the minimum for someone to confirm they are
+ * signing up at the right place.
+ *
+ * Deliberately NOT `Company`. That type carries email, phone, status and
+ * address; returning it from a `@public` field would hand the business's whole
+ * record to anyone who guesses a slug.
+ */
+export type PublicCompany = {
+  id: Scalars['ID']['output'];
+  logoUrl?: Maybe<Scalars['String']['output']>;
+  name: Scalars['String']['output'];
+  slug: Scalars['String']['output'];
+};
+
 export type PurchasePackageInput = {
   dogId: Scalars['ID']['input'];
   /** Marks the transaction COMPLETED. Otherwise it stays PENDING. */
@@ -814,6 +875,12 @@ export type PurchasePackageInput = {
 
 export type Query = {
   _empty?: Maybe<Scalars['String']['output']>;
+  /**
+   * A business by slug, for the client signup screen. Null when it does not
+   * exist or is not active — a 404 and a null carry the same information, and
+   * the null spares the caller from telling them apart.
+   */
+  companyBySlug?: Maybe<PublicCompany>;
   /**
    * Customers of the active company. Staff-only: this is the client list.
    * Replaces `companyDogOwners`, which took companyId as an argument and
@@ -874,6 +941,11 @@ export type Query = {
   serviceAvailability: ServiceAvailability;
   /** Services offered by the active company. */
   services: Array<Service>;
+};
+
+
+export type QueryCompanyBySlugArgs = {
+  slug: Scalars['String']['input'];
 };
 
 
@@ -1004,6 +1076,8 @@ export type QuotedAddOn = {
 };
 
 export type RequestPasswordResetInput = {
+  /** Defaults to BUSINESS, which is the previous behaviour. */
+  app?: InputMaybe<AppAudience>;
   email: Scalars['String']['input'];
 };
 

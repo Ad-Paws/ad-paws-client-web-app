@@ -79,6 +79,15 @@ input AddressInput {
   zip: String!
 }
 
+"""A qué aplicación vuelve el usuario desde un correo."""
+enum AppAudience {
+  """App del negocio."""
+  BUSINESS
+
+  """App de clientes finales."""
+  CLIENT
+}
+
 type AuthResponse {
   accessToken: String!
   refreshToken: String!
@@ -239,7 +248,20 @@ input CreateServiceInput {
 }
 
 input CreateUserInput {
+  """
+  Which app the signup came from. Decides where the verification email points.
+  """
+  app: AppAudience
   birthDate: DateTime
+
+  """
+  Links the account as a CLIENT of the business with that slug, in the same
+  transaction that creates the user. Omitting it creates an account with no
+  company — which is how a business owner signs up before `createCompany`.
+  
+  It can only ever produce a CLIENT membership. No public input decides a role.
+  """
+  companySlug: String
   email: String!
   gender: Gender
   lastname: String
@@ -557,9 +579,30 @@ type Mutation {
   deletePriceException(id: ID!): Boolean!
   inviteMember(input: InviteMemberInput!): InviteMemberPayload!
 
+  """
+  Links the authenticated user as a CLIENT of the business with that slug.
+  
+  Idempotent: if they are already a client there it returns the existing
+  membership instead of failing — retrying is not an error. A revoked
+  membership is reactivated, so its history stays attached to the same row.
+  
+  `@auth` with no `requires`: the caller has no role in that company yet, which
+  is the whole point.
+  """
+  joinCompany(slug: String!): CompanyMembership!
+
   """Ends every session on every device."""
   logoutAllSessions: LogoutResponse!
-  logoutUser: LogoutResponse!
+
+  """
+  Ends the session on THIS device.
+  
+  With a cookie it destroys the session; with a bearer token it revokes the
+  refresh token presented. Sending both is valid and is what a client that
+  supports both does. Previously this required an express session, so a
+  bearer-only client could never sign out.
+  """
+  logoutUser(refreshToken: String): LogoutResponse!
 
   """
   Records that payment was taken outside the platform (the business's card
@@ -730,6 +773,21 @@ enum PricingUnit {
   SESSION
 }
 
+"""
+Public face of a business: the minimum for someone to confirm they are
+signing up at the right place.
+
+Deliberately NOT `Company`. That type carries email, phone, status and
+address; returning it from a `@public` field would hand the business's whole
+record to anyone who guesses a slug.
+"""
+type PublicCompany {
+  id: ID!
+  logoUrl: String
+  name: String!
+  slug: String!
+}
+
 input PurchasePackageInput {
   dogId: ID!
 
@@ -741,6 +799,13 @@ input PurchasePackageInput {
 
 type Query {
   _empty: String
+
+  """
+  A business by slug, for the client signup screen. Null when it does not
+  exist or is not active — a 404 and a null carry the same information, and
+  the null spares the caller from telling them apart.
+  """
+  companyBySlug(slug: String!): PublicCompany
 
   """
   Customers of the active company. Staff-only: this is the client list.
@@ -835,6 +900,8 @@ type QuotedAddOn {
 }
 
 input RequestPasswordResetInput {
+  """Defaults to BUSINESS, which is the previous behaviour."""
+  app: AppAudience
   email: String!
 }
 

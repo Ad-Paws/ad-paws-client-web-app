@@ -1,4 +1,5 @@
-import { LOGIN_MUTATION } from "@/lib/api/user.api";
+import { SIGN_IN } from "@/graphql/user";
+import { setTokens } from "@/lib/session";
 import { useMutation } from "@apollo/client/react";
 import { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -12,16 +13,8 @@ interface LoginFormValues {
   password: string;
 }
 
-interface LoginResponse {
-  signUser: {
-    accessToken: string;
-    refreshToken: string;
-  };
-}
-
 export default function Login() {
-  const [signInUser, { loading, data, error }] =
-    useMutation<LoginResponse>(LOGIN_MUTATION);
+  const [signInUser, { loading, data, error }] = useMutation(SIGN_IN);
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -34,7 +27,9 @@ export default function Login() {
     const handleLogin = async () => {
       if (data?.signUser) {
         try {
-          // Save tokens and fetch user data
+          // Con Bearer los tokens se guardan: son la sesión, no un subproducto
+          // del login como cuando todo dependía de la cookie.
+          setTokens(data.signUser);
           await login();
 
           // Redirect to the page they were trying to access, or home
