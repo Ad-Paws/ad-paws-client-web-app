@@ -9,26 +9,30 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useForm } from "react-hook-form";
 import { cn } from "@/lib/utils";
+import { PASSWORD_HINT, validatePassword } from "@/lib/password";
+
+/** El enum del schema, en mayúsculas: el backend rechaza "Male". */
+export type GenderValue = "FEMALE" | "MALE" | "OTHER";
 
 export interface UserInfoFormValues {
   name: string;
   lastname: string;
   birthdate: Date | undefined;
-  gender: "Female" | "Male" | "Other" | "";
+  gender: GenderValue | "";
   email: string;
   password?: string;
   phone: string;
 }
 
 interface GenderOption {
-  value: "Female" | "Male" | "Other";
+  value: GenderValue;
   label: string;
 }
 
 const genderOptions: GenderOption[] = [
-  { value: "Female", label: "Femenino" },
-  { value: "Male", label: "Masculino" },
-  { value: "Other", label: "Otro" },
+  { value: "FEMALE", label: "Femenino" },
+  { value: "MALE", label: "Masculino" },
+  { value: "OTHER", label: "Otro" },
 ];
 
 interface UserInfoFormProps {
@@ -192,20 +196,16 @@ export function UserInfoForm({
             name="password"
             rules={{
               required: "La contraseña es requerida",
-              minLength: {
-                value: 8,
-                message: "La contraseña debe tener al menos 8 caracteres",
-              },
+              // La misma regla que aplica el servidor. Antes pedía 8 sin
+              // exigir dígitos, así que una contraseña válida en la UI moría
+              // con VALIDATION_ERROR al enviarse.
+              validate: (value: string) => validatePassword(value) ?? true,
             }}
             render={({ field }) => (
               <FormItem className="gap-2">
                 <FormLabel className="px-4">Contraseña</FormLabel>
                 <FormControl>
-                  <Input
-                    type="password"
-                    placeholder="Mínimo 8 caracteres"
-                    {...field}
-                  />
+                  <Input type="password" placeholder={PASSWORD_HINT} {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

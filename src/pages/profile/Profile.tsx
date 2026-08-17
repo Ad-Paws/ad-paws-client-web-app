@@ -1,19 +1,13 @@
-import { useQuery, useMutation } from "@apollo/client/react";
-import { USER_PROFILE_QUERY, UPDATE_USER_MUTATION } from "@/lib/api/user.api";
-import { UserInfoForm, type UserInfoFormValues } from "@/components/Form/Forms/UserInfoForm";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useState } from "react";
+import { useMutation, useQuery } from "@apollo/client/react";
 import { Helmet } from "react-helmet-async";
+import { ChevronRight, LogOut } from "lucide-react";
+import { ME, UPDATE_USER } from "@/graphql/user";
+import { UserInfoForm, type UserInfoFormValues } from "@/components/Form/Forms/UserInfoForm";
+import ChangePasswordForm from "@/components/Form/Forms/ChangePasswordForm";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
-
-interface UserProfile {
-  id: string;
-  name: string;
-  lastname: string;
-  email: string;
-  phone: string;
-  gender: "Female" | "Male" | "Other" | "";
-  birthDate: string;
-}
+import { messageFor } from "@/lib/api/errors";
 
 function ProfileAvatar({ name, lastname }: { name: string; lastname: string }) {
   const initials = [name[0], lastname[0]].filter(Boolean).join("").toUpperCase();
@@ -49,26 +43,32 @@ function ProfileSkeleton() {
 }
 
 export default function Profile() {
-  const { refetchUser } = useAuth();
-  const { data, loading } = useQuery<{ user: UserProfile }>(USER_PROFILE_QUERY, {
-    fetchPolicy: "network-only",
-  });
+  const { refetchUser, logout, activeCompany, companies, selectCompany } = useAuth();
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
 
-  const [updateUser, { loading: updating }] = useMutation(UPDATE_USER_MUTATION, {
-    onCompleted: () => refetchUser(),
-  });
+  const { data, loading } = useQuery(ME, { fetchPolicy: "network-only" });
 
-  const user = data?.user;
+  const [updateUser, { loading: updating, error: updateError }] = useMutation(
+    UPDATE_USER,
+    { onCompleted: () => void refetchUser() },
+  );
 
+  const user = data?.me;
+
+  /**
+   * `UpdateUserInput` sólo acepta nombre, apellido, teléfono, género y fecha.
+   * El correo salió a propósito —cambiarlo invalidaría la verificación— y la
+   * contraseña tiene su propia mutación, que exige la actual.
+   */
   const handleSubmit = (values: UserInfoFormValues) => {
-    updateUser({
+    void updateUser({
       variables: {
         input: {
           name: values.name,
           lastname: values.lastname,
           phone: values.phone,
-          gender: values.gender,
-          birthDate: values.birthdate?.toISOString(),
+          gender: values.gender || null,
+          birthDate: values.birthdate?.toISOString() ?? null,
         },
       },
     });
@@ -81,26 +81,90 @@ export default function Profile() {
       </Helmet>
 
       <div className="h-full overflow-auto">
-        <div className="px-6">
+        <div className="px-6 pb-8">
           {loading || !user ? (
             <ProfileSkeleton />
           ) : (
             <>
-              <ProfileAvatar name={user.name} lastname={user.lastname} />
+              <ProfileAvatar name={user.name ?? ""} lastname={user.lastname ?? ""} />
+
               <UserInfoForm
                 onSubmit={handleSubmit}
                 loading={updating}
                 disableEmail
                 hidePassword
                 defaultValues={{
-                  name: user.name,
-                  lastname: user.lastname,
+                  name: user.name ?? "",
+                  lastname: user.lastname ?? "",
                   email: user.email,
                   phone: user.phone ?? "",
                   gender: user.gender ?? "",
                   birthdate: user.birthDate ? new Date(user.birthDate) : undefined,
                 }}
               />
+
+              {updateError && (
+                <p className="mt-3 text-sm text-destructive">{messageFor(updateError)}</p>
+              )}
+
+              <section className="mt-8 flex flex-col gap-2">
+                <p className="text-sm font-semibold text-muted-foreground">Seguridad</p>
+
+                {showPasswordForm ? (
+                  <ChangePasswordForm onDone={() => setShowPasswordForm(false)} />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordForm(true)}
+                    className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3.5 text-left transition-colors hover:bg-muted"
+                  >
+                    <span className="text-sm font-medium text-foreground">
+                      Cambiar contraseña
+                    </span>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                )}
+              </section>
+
+              {/*
+                Selector de negocio. Sólo aparece con más de una membresía: es
+                el caso en que `x-company-id` deja de ser opcional y el usuario
+                tiene que poder decir sobre cuál está mirando.
+              */}
+              {companies.length > 1 && (
+                <section className="mt-8 flex flex-col gap-2">
+                  <p className="text-sm font-semibold text-muted-foreground">Negocio</p>
+                  {companies.map((company) => (
+                    <button
+                      key={company.id}
+                      type="button"
+                      onClick={() => selectCompany(company.id)}
+                      className={
+                        "flex items-center justify-between rounded-xl border px-4 py-3.5 text-left transition-colors " +
+                        (company.id === activeCompany?.id
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-card hover:bg-muted")
+                      }
+                    >
+                      <span className="text-sm font-medium text-foreground">
+                        {company.name}
+                      </span>
+                      {company.id === activeCompany?.id && (
+                        <span className="text-xs font-semibold text-primary">Activo</span>
+                      )}
+                    </button>
+                  ))}
+                </section>
+              )}
+
+              <button
+                type="button"
+                onClick={() => void logout()}
+                className="mt-8 flex w-full items-center justify-center gap-2 rounded-full border border-border px-4 py-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted"
+              >
+                <LogOut className="h-4 w-4" />
+                Cerrar sesión
+              </button>
             </>
           )}
         </div>

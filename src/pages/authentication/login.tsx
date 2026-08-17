@@ -1,8 +1,7 @@
 import { SIGN_IN } from "@/graphql/user";
-import { setTokens } from "@/lib/session";
 import { useMutation } from "@apollo/client/react";
 import { useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import LoginForm from "@/components/Form/Forms/LoginForm";
 import Logo from "@/components/Logo";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,10 +26,9 @@ export default function Login() {
     const handleLogin = async () => {
       if (data?.signUser) {
         try {
-          // Con Bearer los tokens se guardan: son la sesión, no un subproducto
-          // del login como cuando todo dependía de la cookie.
-          setTokens(data.signUser);
-          await login();
+          // Con Bearer los tokens SON la sesión, no un subproducto del login
+          // como cuando todo dependía de la cookie.
+          await login(data.signUser);
 
           // Redirect to the page they were trying to access, or home
           const from =
@@ -63,6 +61,12 @@ export default function Login() {
         </div>
       )}
       <LoginForm onSubmit={onSubmit} loading={loading} />
+      <Link
+        to="/auth/recuperar"
+        className="text-sm text-center text-muted-foreground hover:text-foreground transition-colors"
+      >
+        ¿Olvidaste tu contraseña?
+      </Link>
     </Card>
   );
 }

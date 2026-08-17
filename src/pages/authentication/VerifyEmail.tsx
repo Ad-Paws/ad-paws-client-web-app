@@ -1,25 +1,18 @@
 import { useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation } from "@apollo/client/react";
-import { VERIFY_EMAIL_MUTATION } from "@/lib/api/user.api";
+import { VERIFY_EMAIL } from "@/graphql/user";
 import { Check, Loader2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import Logo from "@/components/Logo";
 import { useAuth } from "@/contexts/AuthContext";
 
-interface VerifyEmailResponse {
-  verifyEmail: {
-    accessToken: string;
-    refreshToken: string;
-  };
-}
-
 type VerifyState = "loading" | "success" | "error";
 
 function getVerifyState(
   loading: boolean,
-  data: VerifyEmailResponse | null | undefined,
+  data: { verifyEmail?: { accessToken: string } } | null | undefined,
   error: unknown,
 ): VerifyState {
   if (loading) return "loading";
@@ -31,9 +24,17 @@ function getVerifyState(
 export default function VerifyEmail() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
-  const [verifyEmail, { loading, data, error }] =
-    useMutation<VerifyEmailResponse>(VERIFY_EMAIL_MUTATION);
+  const { login } = useAuth();
+  /**
+   * `verifyEmail` devuelve un par de tokens nuevo y NO abre sesión de cookie,
+   * a diferencia de createUser y signUser. Con Bearer eso es una ventaja:
+   * verificar desde otro dispositivo deja la sesión iniciada ahí mismo.
+   */
+  const [verifyEmail, { loading, data, error }] = useMutation(VERIFY_EMAIL, {
+    onCompleted: (result) => {
+      if (result.verifyEmail) void login(result.verifyEmail);
+    },
+  });
 
   const hasRun = useRef(false);
 
@@ -53,10 +54,10 @@ export default function VerifyEmail() {
 
   useEffect(() => {
     if (!data?.verifyEmail) return;
-    const destination = isAuthenticated ? "/" : "/auth/login";
+    const destination = "/";
     const timer = setTimeout(() => navigate(destination, { replace: true }), 3000);
     return () => clearTimeout(timer);
-  }, [data, navigate, isAuthenticated]);
+  }, [data, navigate]);
 
   const state = getVerifyState(loading, data, error);
 
@@ -88,16 +89,14 @@ export default function VerifyEmail() {
               ¡Cuenta verificada!
             </p>
             <p className="text-sm text-muted-foreground">
-              {isAuthenticated
-                ? "Te redirigiremos al dashboard en unos segundos."
-                : "Te redirigiremos al inicio de sesión en unos segundos."}
+              Te llevamos a tu cuenta en unos segundos.
             </p>
           </div>
           <Button
             className="w-full rounded-full"
-            onClick={() => navigate(isAuthenticated ? "/" : "/auth/login", { replace: true })}
+            onClick={() => navigate("/", { replace: true })}
           >
-            {isAuthenticated ? "Ir al dashboard" : "Ir al inicio de sesión"}
+            Ir a mi cuenta
           </Button>
         </>
       )}

@@ -1,205 +1,200 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, {
   createContext,
-  useContext,
-  useState,
-  useEffect,
   useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
 } from "react";
 import { apolloClient } from "@/lib/api/apolloClient";
-import { USER_QUERY } from "@/lib/api/user.api";
-import { LOGOUT } from "@/graphql/user";
-import { clearSession, getRefreshToken, onSessionCleared } from "@/lib/session";
+import { ME, MY_COMPANIES, LOGOUT } from "@/graphql/user";
+import {
+  clearSession,
+  getCompanyId,
+  getRefreshToken,
+  hasSession,
+  onSessionCleared,
+  setCompanyId,
+  setTokens,
+  type TokenPair,
+} from "@/lib/session";
+import type { MeQuery, MyCompaniesQuery } from "@/generated/graphql";
 
-// TODO(F1): el almacenamiento de sesión se reescribe con Bearer + refreshSession.
-const USER_DATA_KEY = "userData";
+export type User = NonNullable<MeQuery["me"]>;
+export type Company = MyCompaniesQuery["myCompanies"][number];
 
-// Types
-export interface User {
-  id?: string;
-  email?: string;
-  name?: string;
-  company?: Company;
-  // Add more user properties as needed
-}
+/**
+ * En qué situación está la cuenta respecto a los negocios.
+ *
+ * No es un detalle cosmético: el backend resuelve cada petición contra UNA
+ * empresa activa, y sin ella todo lo que toque datos de negocio responde
+ * TENANT_CONTEXT_REQUIRED. Una cuenta recién creada sin slug cae justo ahí,
+ * así que la app necesita distinguir "no ha iniciado sesión" de "inició
+ * sesión pero todavía no pertenece a ningún negocio".
+ */
+export type MembershipState = "none" | "single" | "multiple";
 
-export interface Company {
-  id: string;
-  logoUrl: string;
-  name: string;
-  ownerId: string;
-  uuid: string;
-}
 export interface AuthContextValue {
   user: User | null;
+  companies: Company[];
+  activeCompany: Company | null;
+  membershipState: MembershipState;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (userData?: User) => Promise<void>;
-  logout: () => void;
-  updateUser: (userData: User) => void;
+  /** Guarda los tokens y carga al usuario. */
+  login: (tokens?: TokenPair) => Promise<void>;
+  logout: () => Promise<void>;
   refetchUser: () => Promise<void>;
-  company: Company | null;
+  selectCompany: (companyId: string) => void;
 }
 
-// Create Context
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-// Provider Props
 interface AuthProviderProps {
   children: React.ReactNode;
 }
 
-// Provider Component
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
-  const [company, setCompany] = useState<Company | null>(null);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [activeCompanyId, setActiveCompanyId] = useState<string | null>(getCompanyId);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch user data from API
-  const fetchUserData = useCallback(async () => {
-    try {
-      const { data } = await apolloClient.query<{
-        user: { id: string; email: string; name: string; company: Company };
-      }>({
-        query: USER_QUERY,
-        fetchPolicy: "network-only", // Always fetch fresh data
-      });
+  /**
+   * `me` y `myCompanies` son de las pocas operaciones que funcionan SIN empresa
+   * activa (`@auth` a secas). Por eso sirven para arrancar: son lo único que
+   * se puede preguntar antes de saber si la cuenta pertenece a algún negocio.
+   */
+  const fetchUser = useCallback(async () => {
+    const [me, mine] = await Promise.all([
+      apolloClient.query({ query: ME, fetchPolicy: "network-only" }),
+      apolloClient.query({ query: MY_COMPANIES, fetchPolicy: "network-only" }),
+    ]);
 
-      if (data?.user) {
-        const userData: User = {
-          id: data.user.id,
-          email: data.user.email,
-          name: data.user.name,
-        };
-        const companyData: Company = {
-          id: data.user.company.id,
-          logoUrl: data.user.company.logoUrl,
-          name: data.user.company.name,
-          ownerId: data.user.company.ownerId,
-          uuid: data.user.company.uuid,
-        };
-        // Update state and localStorage
-        setUser(userData);
-        setCompany(companyData);
-        localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
+    const nextUser = me.data?.me ?? null;
+    const nextCompanies = mine.data?.myCompanies ?? [];
 
-        return userData;
-      }
-    } catch (error) {
-      console.error("Failed to fetch user data:", error);
-      // If fetch fails (e.g., cookie expired or invalid), clear auth data
-      localStorage.removeItem(USER_DATA_KEY);
-      setUser(null);
-      throw error;
-    }
+    setUser(nextUser);
+    setCompanies(nextCompanies);
+
+    /**
+     * Con una sola membresía el header es opcional —el servidor la deduce—
+     * pero se fija igual: el día que la persona gane una segunda, un cliente
+     * que nunca mandó el header empieza a fallar sin que nadie haya tocado
+     * nada. Si la guardada ya no está entre las suyas, se descarta.
+     */
+    const stored = getCompanyId();
+    const valid = nextCompanies.some((c) => c.id === stored);
+    const resolved = valid ? stored : (nextCompanies[0]?.id ?? null);
+
+    setCompanyId(resolved);
+    setActiveCompanyId(resolved);
+
+    return nextUser;
   }, []);
 
-  // Initialize auth state by validating cookie
   useEffect(() => {
-    const initializeAuth = async () => {
+    const initialize = async () => {
+      // Sin tokens no hay nada que validar, y preguntar sólo produce un 401.
+      if (!hasSession()) {
+        setIsLoading(false);
+        return;
+      }
       try {
-        // Try to fetch user data - if cookies are valid, this will succeed
-        await fetchUserData();
+        await fetchUser();
       } catch (error) {
-        console.error("Failed to initialize auth:", error);
-        // Cookie is invalid or expired, user is not authenticated
+        console.error("No se pudo restaurar la sesión:", error);
+        clearSession();
       } finally {
         setIsLoading(false);
       }
     };
 
-    initializeAuth();
-  }, [fetchUserData]);
+    void initialize();
+  }, [fetchUser]);
 
-  // Login function - cookies are set by the server
+  /** El link de errores puede invalidar la sesión sin pasar por aquí. */
+  useEffect(
+    () =>
+      onSessionCleared(() => {
+        setUser(null);
+        setCompanies([]);
+        setActiveCompanyId(null);
+      }),
+    [],
+  );
+
   const login = useCallback(
-    async (userData?: User) => {
-      try {
-        // If user data is provided, use it
-        if (userData) {
-          localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
-          setUser(userData);
-        } else {
-          // Otherwise, fetch user data from API (validates cookie)
-          await fetchUserData();
-        }
-      } catch (error) {
-        console.error("Failed to validate authentication:", error);
-        throw error;
-      }
+    async (tokens?: TokenPair) => {
+      if (tokens) setTokens(tokens);
+      await fetchUser();
     },
-    [fetchUserData]
+    [fetchUser],
   );
 
   /**
-   * Cierra sesión en este dispositivo.
-   *
-   * El refresh token va explícito: es lo que el servidor revoca. Si la llamada
-   * falla —red caída, token ya vencido— la sesión local se limpia igual: dejar
-   * al usuario "dentro" porque el servidor no contestó es la peor salida.
+   * Cierra sesión en este dispositivo. Si la llamada falla —red caída, token
+   * ya vencido— la sesión local se limpia igual: dejar al usuario "dentro"
+   * porque el servidor no contestó es la peor salida posible.
    */
   const logout = useCallback(async () => {
-    localStorage.removeItem(USER_DATA_KEY);
     try {
       await apolloClient.mutate({
         mutation: LOGOUT,
         variables: { refreshToken: getRefreshToken() },
       });
     } catch (error) {
-      console.error("Logout request failed; clearing local session anyway", error);
+      console.error("Falló el cierre de sesión remoto; se limpia el local:", error);
     } finally {
       clearSession();
-      await apolloClient.clearStore();
       setUser(null);
+      setCompanies([]);
+      setActiveCompanyId(null);
+      await apolloClient.clearStore();
     }
   }, []);
 
-  /**
-   * El link de errores puede invalidar la sesión sin pasar por aquí (un
-   * refresh que falla). Esto es lo que hace que la UI se entere.
-   */
-  useEffect(() => onSessionCleared(() => setUser(null)), []);
-
-  // Update user function
-  const updateUser = useCallback((userData: User) => {
-    try {
-      localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
-      setUser(userData);
-    } catch (error) {
-      console.error("Failed to update user data:", error);
-    }
-  }, []);
-
-  // Refetch user data (useful after profile updates)
   const refetchUser = useCallback(async () => {
     try {
-      await fetchUserData();
+      await fetchUser();
     } catch (error) {
-      console.error("Failed to refetch user data:", error);
+      console.error("No se pudo recargar al usuario:", error);
     }
-  }, [fetchUserData]);
+  }, [fetchUser]);
 
-  const value: AuthContextValue = {
-    user,
-    isAuthenticated: user !== null,
-    isLoading,
-    login,
-    logout,
-    updateUser,
-    refetchUser,
-    company,
-  };
+  /** Cambiar de negocio cambia lo que devuelve casi todo: la caché se vacía. */
+  const selectCompany = useCallback((companyId: string) => {
+    setCompanyId(companyId);
+    setActiveCompanyId(companyId);
+    void apolloClient.resetStore();
+  }, []);
+
+  const value = useMemo<AuthContextValue>(() => {
+    const membershipState: MembershipState =
+      companies.length === 0 ? "none" : companies.length === 1 ? "single" : "multiple";
+
+    return {
+      user,
+      companies,
+      activeCompany: companies.find((c) => c.id === activeCompanyId) ?? null,
+      membershipState,
+      isAuthenticated: user !== null,
+      isLoading,
+      login,
+      logout,
+      refetchUser,
+      selectCompany,
+    };
+  }, [user, companies, activeCompanyId, isLoading, login, logout, refetchUser, selectCompany]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-// Custom hook to use auth context
 export function useAuth() {
   const context = useContext(AuthContext);
-
   if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
-
   return context;
 }

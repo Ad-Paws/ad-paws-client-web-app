@@ -31,47 +31,6 @@ export const DOG_BY_ID = gql`
   }
 `;
 
-export const CREATE_USER_DOGS = gql`
-  mutation Mutation($input: CreateDogsInput!) {
-    createDogs(input: $input) {
-      breed
-      color
-      id
-      gender
-      name
-      size
-      weight
-      birthDate
-      imageUrl
-    }
-  }
-`;
-
-export const UPDATE_DOG = gql`
-  mutation UpdateDog($input: UpdateDogInput!) {
-    updateDog(input: $input) {
-      id
-      name
-      breed
-      birthDate
-      gender
-      color
-      weight
-      size
-      imageUrl
-      owner {
-        id
-        email
-        name
-        lastname
-        phone
-        profilePicture
-        status
-      }
-    }
-  }
-`;
-
 export const GET_USER_DOGS = gql`
   query UserDogs {
     userDogs {

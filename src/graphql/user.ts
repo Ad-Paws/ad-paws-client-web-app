@@ -63,3 +63,71 @@ export const LOGOUT = graphql(`
     }
   }
 `);
+
+/**
+ * Alta pública.
+ *
+ * `companySlug` es lo que convierte la cuenta en cliente de un negocio: sin
+ * él el usuario queda sin membresía y toda operación con datos de negocio
+ * responde TENANT_CONTEXT_REQUIRED. `app: CLIENT` decide a dónde apunta el
+ * link del correo de verificación, que con dos frontends no puede ser fijo.
+ */
+export const CREATE_USER = graphql(`
+  mutation CreateUser($input: CreateUserInput!) {
+    createUser(input: $input) {
+      user {
+        id
+        email
+        name
+      }
+      tokens {
+        accessToken
+        refreshToken
+      }
+    }
+  }
+`);
+
+export const VERIFY_EMAIL = graphql(`
+  mutation VerifyEmail($token: String!) {
+    verifyEmail(token: $token) {
+      accessToken
+      refreshToken
+    }
+  }
+`);
+
+/** Sin email ni contraseña: el primero no se edita y la segunda tiene su propia mutación. */
+export const UPDATE_USER = graphql(`
+  mutation UpdateUser($input: UpdateUserInput!) {
+    updateUser(input: $input) {
+      id
+      name
+      lastname
+      email
+      phone
+      gender
+      birthDate
+    }
+  }
+`);
+
+/** Devuelve true exista o no la cuenta: lo contrario delataría qué correos hay registrados. */
+export const REQUEST_PASSWORD_RESET = graphql(`
+  mutation RequestPasswordReset($input: RequestPasswordResetInput!) {
+    requestPasswordReset(input: $input)
+  }
+`);
+
+export const CONFIRM_PASSWORD_RESET = graphql(`
+  mutation ConfirmPasswordReset($input: ConfirmPasswordResetInput!) {
+    confirmPasswordReset(input: $input)
+  }
+`);
+
+/** Cambiar una contraseña conocida exige demostrar que se conoce. */
+export const CHANGE_PASSWORD = graphql(`
+  mutation ChangePassword($input: ChangePasswordInput!) {
+    changePassword(input: $input)
+  }
+`);

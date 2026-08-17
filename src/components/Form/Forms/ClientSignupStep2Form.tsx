@@ -25,8 +25,10 @@ export interface DogFormValues {
   name: string;
   breed: string;
   color: string;
-  size: "small" | "medium" | "large" | "xlarge" | "";
-  gender: "male" | "female" | "";
+  /** Valores del schema. El tipo declaraba minúsculas y el formulario
+   * guardaba mayúsculas: mentía sobre lo que realmente contenía. */
+  size: "SMALL" | "MEDIUM" | "LARGE" | "GIGANTIC" | "";
+  gender: "MALE" | "FEMALE" | "";
   weight: string;
   birthDate: Date | undefined;
 }
@@ -37,7 +39,7 @@ interface SizeOption {
 }
 
 interface GenderOption {
-  value: "Male" | "Female";
+  value: "MALE" | "FEMALE";
   label: string;
 }
 
@@ -49,8 +51,8 @@ const sizeOptions: SizeOption[] = [
 ];
 
 const genderOptions: GenderOption[] = [
-  { value: "Male", label: "Macho" },
-  { value: "Female", label: "Hembra" },
+  { value: "MALE", label: "Macho" },
+  { value: "FEMALE", label: "Hembra" },
 ];
 
 interface ClientSignupStep2FormProps {

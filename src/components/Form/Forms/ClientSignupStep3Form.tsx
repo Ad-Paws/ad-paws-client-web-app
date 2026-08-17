@@ -15,9 +15,9 @@ interface ClientSignupStep3FormProps {
 }
 
 const genderLabels: Record<string, string> = {
-  Female: "Femenino",
-  Male: "Masculino",
-  Other: "Otro",
+  FEMALE: "Femenino",
+  MALE: "Masculino",
+  OTHER: "Otro",
 };
 
 const dogGenderLabels: Record<string, string> = {

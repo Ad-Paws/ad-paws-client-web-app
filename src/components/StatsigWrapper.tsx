@@ -13,7 +13,7 @@ interface StatsigWrapperProps {
  * It ensures that analytics and feature flags are properly tracked per user.
  */
 export function StatsigWrapper({ children }: StatsigWrapperProps) {
-  const { user, company, isAuthenticated } = useAuth();
+  const { user, activeCompany, isAuthenticated } = useAuth();
   const { client } = useStatsigClient();
 
   useEffect(() => {
@@ -26,11 +26,12 @@ export function StatsigWrapper({ children }: StatsigWrapperProps) {
         await client.updateUserAsync({
           userID: user.id || "anonymous",
           email: user.email,
+          // `custom` sólo acepta primitivos: un null aquí revienta el SDK.
           custom: {
-            name: user.name,
-            companyId: company?.id,
-            companyName: company?.name,
-            companyUUID: company?.uuid,
+            name: user.name ?? "",
+            companyId: activeCompany?.id ?? "",
+            companyName: activeCompany?.name ?? "",
+            companySlug: activeCompany?.slug ?? "",
           },
         });
       } else {
@@ -42,7 +43,7 @@ export function StatsigWrapper({ children }: StatsigWrapperProps) {
     };
 
     updateStatsigUser();
-  }, [user, company, isAuthenticated, client]);
+  }, [user, activeCompany, isAuthenticated, client]);
 
   return <>{children}</>;
 }

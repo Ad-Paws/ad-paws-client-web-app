@@ -1,14 +1,17 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import AuthenticationLayout from "./layouts/AuthenticationLayout";
-import Login from "./pages/authentication/login";
+import DashboardLayout from "./layouts/DashboardLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { PublicRoute } from "./components/PublicRoute";
-import Dashboard from "./pages/dashboard/Dashboard";
-import DashboardLayout from "./layouts/DashboardLayout";
+import Login from "./pages/authentication/login";
 import ClientSignup from "./pages/authentication/ClientSignup";
 import VerifyEmail from "./pages/authentication/VerifyEmail";
-import Profile from "./pages/profile/Profile";
+import RequestPasswordReset from "./pages/authentication/RequestPasswordReset";
+import ResetPassword from "./pages/authentication/ResetPassword";
+import LinkCompany from "./pages/onboarding/LinkCompany";
+import Dashboard from "./pages/dashboard/Dashboard";
 import DogProfile from "./pages/dog/DogProfile";
+import Profile from "./pages/profile/Profile";
 
 export const routes = createBrowserRouter([
   {
@@ -51,9 +54,14 @@ export const routes = createBrowserRouter([
     ],
   },
   {
+    /**
+     * El perfil sigue accesible sin negocio: `me` y `updateUser` no necesitan
+     * empresa activa, y es la única forma de que alguien sin vincular pueda
+     * corregir sus datos o cerrar sesión.
+     */
     path: "/perfil",
     element: (
-      <ProtectedRoute>
+      <ProtectedRoute allowWithoutCompany>
         <DashboardLayout />
       </ProtectedRoute>
     ),
@@ -63,6 +71,14 @@ export const routes = createBrowserRouter([
         Component: Profile,
       },
     ],
+  },
+  {
+    path: "/vincular-negocio",
+    element: (
+      <ProtectedRoute allowWithoutCompany>
+        <LinkCompany />
+      </ProtectedRoute>
+    ),
   },
   {
     path: "/auth",
@@ -79,6 +95,14 @@ export const routes = createBrowserRouter([
       {
         path: "verificar-cuenta",
         Component: VerifyEmail,
+      },
+      {
+        path: "recuperar",
+        Component: RequestPasswordReset,
+      },
+      {
+        path: "restablecer",
+        Component: ResetPassword,
       },
     ],
   },
