@@ -1,3 +1,6 @@
+// ⚠️ Documentos del backend ANTERIOR: firmas y campos ya no existen en el
+// schema actual. Se migran a `src/graphql/` con el helper `graphql()` en
+// F3–F6 — ver el plan, §6.1 (mapa de operaciones).
 import { gql } from "@apollo/client";
 
 export const LOGIN_MUTATION = gql`
@@ -81,29 +84,6 @@ export const UPDATE_USER_MUTATION = gql`
       phone
       gender
       birthDate
-    }
-  }
-`;
-
-export const GET_OWNERS_QUERY = gql`
-  query CompanyDogOwners($companyId: Int) {
-    companyDogOwners(companyId: $companyId) {
-      id
-      profilePicture
-      email
-      phone
-      dogs {
-        id
-        imageUrl
-        reservations {
-          id
-          createdAt
-        }
-        breed
-        color
-        name
-      }
-      status
     }
   }
 `;

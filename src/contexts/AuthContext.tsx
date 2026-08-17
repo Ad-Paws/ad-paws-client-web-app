@@ -6,9 +6,11 @@ import React, {
   useEffect,
   useCallback,
 } from "react";
-import { USER_DATA_KEY } from "@/lib/auth";
 import { apolloClient } from "@/lib/api/apolloClient";
 import { LOGOUT_MUTATION, USER_QUERY } from "@/lib/api/user.api";
+
+// TODO(F1): el almacenamiento de sesión se reescribe con Bearer + refreshSession.
+const USER_DATA_KEY = "userData";
 
 // Types
 export interface User {

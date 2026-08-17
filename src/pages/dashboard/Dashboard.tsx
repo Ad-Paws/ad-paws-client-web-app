@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarX2, HistoryIcon, WrenchIcon } from "lucide-react";
 import { useStatsigClient } from "@statsig/react-bindings";
 import DashboardDogsCarousel from "./DashboardDogsCarousel";
-import type { Dog } from "@/types/Dog";
+import type { Dog } from "@/generated/schema-types";
 
 interface EmptyStateProps {
   icon: React.ReactNode;

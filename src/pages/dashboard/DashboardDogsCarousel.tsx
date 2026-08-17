@@ -1,6 +1,6 @@
 import { DogAvatarList } from "@/components/DogAvatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Dog } from "@/types/Dog";
+import type { Dog } from "@/generated/schema-types";
 
 interface DashboardDogsCarouselProps {
   loading: boolean;

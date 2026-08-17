@@ -1,38 +1,7 @@
+// ⚠️ Documentos del backend ANTERIOR: firmas y campos ya no existen en el
+// schema actual. Se migran a `src/graphql/` con el helper `graphql()` en
+// F3–F6 — ver el plan, §6.1 (mapa de operaciones).
 import { gql } from "@apollo/client";
-
-export const CREATE_SERVICE = gql`
-  mutation CreateService($input: CreateServiceInput) {
-    createService(input: $input) {
-      id
-      name
-      type
-      category
-      price
-      pricingUnit
-      duration
-      startTime
-      endTime
-      daysAvailable
-      active
-      companyId
-      createdAt
-      updatedAt
-    }
-  }
-`;
-
-export interface CreateServiceInput {
-  name: string;
-  type: ServiceType;
-  category?: ServiceCategory;
-  companyId: number;
-  price: number;
-  pricingUnit: PricingUnit;
-  duration: number;
-  startTime: string;
-  endTime: string;
-  daysAvailable: string[];
-}
 
 export const SERVICES_BY_COMPANY = gql`
   query ServicesByCompany($input: ServicesByCompanyInput) {

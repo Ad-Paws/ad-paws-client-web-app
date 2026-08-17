@@ -1,3 +1,6 @@
+// ⚠️ Documentos del backend ANTERIOR: firmas y campos ya no existen en el
+// schema actual. Se migran a `src/graphql/` con el helper `graphql()` en
+// F3–F6 — ver el plan, §6.1 (mapa de operaciones).
 import { gql } from "@apollo/client";
 
 // ============================================

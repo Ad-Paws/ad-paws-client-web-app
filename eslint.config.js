@@ -6,7 +6,8 @@ import tseslint from "typescript-eslint";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 export default defineConfig([
-  globalIgnores(["dist"]),
+  // `src/generated` es salida de codegen: se revisa por diff, no por lint.
+  globalIgnores(["dist", "src/generated"]),
   {
     files: ["**/*.{ts,tsx}"],
     extends: [

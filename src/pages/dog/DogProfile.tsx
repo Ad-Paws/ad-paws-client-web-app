@@ -5,7 +5,7 @@ import { DOG_BREEDS, cn, formatAgeFromBirthDate } from "@/lib/utils";
 import { ChevronLeft, PawPrint } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Helmet } from "react-helmet-async";
-import type { Dog } from "@/types/Dog";
+import type { Dog } from "@/generated/schema-types";
 
 // Paw accent colors cycling per card
 const pawColors = [
@@ -18,9 +18,9 @@ const pawColors = [
 ];
 
 const genderLabels: Record<string, string> = {
-  Male: "Macho",
-  Female: "Hembra",
-  Other: "Otro",
+  MALE: "Macho",
+  FEMALE: "Hembra",
+  OTHER: "Otro",
 };
 
 const sizeLabels: Record<string, string> = {
@@ -89,7 +89,7 @@ export default function DogProfile() {
         { label: "Edad", value: formatAgeFromBirthDate(dog.birthDate) },
         { label: "Color", value: dog.color ?? "—" },
         { label: "Tamaño", value: sizeLabels[dog.size ?? ""] ?? "—" },
-        { label: "Peso", value: dog.weight ? `${dog.weight} kg` : "—" },
+        { label: "Peso", value: dog.weightKg ? `${dog.weightKg} kg` : "—" },
         {
           label: "Raza",
           value:

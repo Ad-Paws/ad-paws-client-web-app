@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Dog } from "@/types/Dog";
+import type { Dog } from "@/generated/schema-types";
 
 interface DogAvatarProps {
   dog: Partial<Dog>;
