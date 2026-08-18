@@ -34,7 +34,7 @@ export default function BottomNav({
 
   return (
     <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-md">
-      <nav className="relative flex items-center justify-around bg-white dark:bg-card rounded-2xl shadow-lg shadow-black/10 border border-border px-2">
+      <nav className="relative flex items-center justify-around bg-card rounded-2xl shadow-raised border border-border px-2">
         {/* Left items */}
         {navItems.map((item) => (
           <NavItem key={item.to} {...item} />
@@ -45,7 +45,7 @@ export default function BottomNav({
           type="button"
           onClick={onCenterPress ?? (() => navigate("/reservar"))}
           aria-label="Reservar"
-          className="relative -top-5 flex items-center justify-center w-14 h-14 rounded-full bg-secondary shadow-lg shadow-secondary/40 text-white transition-transform active:scale-95 hover:bg-secondary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary focus-visible:ring-offset-2"
+          className="relative -top-5 flex items-center justify-center w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-raised transition-transform active:scale-95 hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           <Plus className="w-6 h-6 stroke-[2.5]" />
         </button>
@@ -67,7 +67,7 @@ function NavItem({ to, icon, label }: NavItem) {
         cn(
           "flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-colors",
           isActive
-            ? "text-accent"
+            ? "text-primary font-semibold"
             : "text-muted-foreground hover:text-foreground",
         )
       }

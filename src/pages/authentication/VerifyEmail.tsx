@@ -62,7 +62,7 @@ export default function VerifyEmail() {
   const state = getVerifyState(loading, data, error);
 
   return (
-    <Card className="w-full max-w-9/10 md:max-w-[400px] border border-border rounded-lg p-8 bg-white dark:bg-brand-900 flex flex-col items-center gap-6">
+    <Card className="w-full max-w-9/10 md:max-w-[400px] border border-border rounded-xl p-8 bg-card text-card-foreground shadow-card flex flex-col items-center gap-6">
       <Logo className="w-40" />
 
       {state === "loading" && (

@@ -80,9 +80,8 @@ export const FormCombobox = React.forwardRef<
           role="combobox"
           aria-expanded={open}
           className={cn(
-            "bg-[#F9FAFB] border-[#F3F4F6] [&_svg:not([class*='text-'])]:text-[#9CA3AF] focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-input dark:bg-input/30 dark:border-input dark:hover:bg-input/50 flex h-12 w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm whitespace-nowrap shadow-sm dark:shadow-none transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50",
-            !selectedLabel && "text-[#9CA3AF] dark:text-white/80",
-            selectedLabel && "dark:text-white/80",
+            "[&_svg:not([class*='text-'])]:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-input border-input-border dark:bg-input dark:border-input-border hover:bg-accent/60 flex h-12 w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm whitespace-nowrap shadow-sm dark:shadow-none transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50",
+            !selectedLabel && "text-muted-foreground",
             error && "aria-invalid:border-destructive",
             className,
           )}

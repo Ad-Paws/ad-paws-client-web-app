@@ -46,11 +46,11 @@ export default function Login() {
   }, [data, login, navigate, location]);
 
   return (
-    <Card className="w-full max-w-9/10 md:max-w-[400px] border border-border rounded-lg p-6 bg-white dark:bg-brand-900 text-black">
+    <Card className="w-full max-w-9/10 md:max-w-[400px] border border-border rounded-xl p-6 bg-card text-card-foreground shadow-card">
       <div className="flex items-center justify-center">
         <Logo className="w-48" />
       </div>
-      <p className="text-2xl font-bold text-center text-black dark:text-white">
+      <p className="text-2xl font-bold text-center text-foreground">
         ¡Bienvenido de nuevo!
       </p>
       {error && (

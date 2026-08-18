@@ -1,3 +1,14 @@
+/**
+ * ⚠️ ARCHIVO NO USADO — candidato a borrar.
+ *
+ * El proyecto corre Tailwind v4 con `@tailwindcss/vite` y `src/index.css` no
+ * declara `@config`, así que Tailwind nunca lee este archivo. Además envuelve
+ * valores hex en `hsl(var(--x))`, que es sintaxis inválida y produciría colores
+ * rotos si algún día se cargara.
+ *
+ * La única fuente de verdad del tema es `src/index.css` (bloque `@theme inline`).
+ * No edites colores aquí: no tienen efecto.
+ */
 import type { Config } from "tailwindcss";
 import twAnimateCss from "tw-animate-css";
 

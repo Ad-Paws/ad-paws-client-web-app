@@ -55,7 +55,7 @@ export default function LoginForm({
                 <FormControl>
                   <InputGroup>
                     <InputGroupAddon>
-                      <Mail className="dark:text-white/80 text-black" />
+                      <Mail className="text-muted-foreground" />
                     </InputGroupAddon>
                     <InputGroupInput
                       type="email"
@@ -80,7 +80,7 @@ export default function LoginForm({
               <FormControl>
                 <InputGroup>
                   <InputGroupAddon>
-                    <Lock className="dark:text-white/80 text-black" />
+                    <Lock className="text-muted-foreground" />
                   </InputGroupAddon>
                   <InputGroupInput
                     type="password"

@@ -114,7 +114,7 @@ export function DogAvatarList({
           type="button"
           onClick={() => scroll("left")}
           aria-label="Desplazar izquierda"
-          className="absolute left-0 top-[28px] -translate-y-1/2 z-10 flex items-center justify-center w-7 h-7 rounded-full bg-white dark:bg-secondary border border-border shadow-sm text-foreground hover:bg-muted transition-colors"
+          className="absolute left-0 top-[28px] -translate-y-1/2 z-10 flex items-center justify-center w-7 h-7 rounded-full bg-card border border-border shadow-card text-foreground hover:bg-accent transition-colors"
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
@@ -142,7 +142,7 @@ export function DogAvatarList({
           type="button"
           onClick={() => scroll("right")}
           aria-label="Desplazar derecha"
-          className="absolute right-0 top-[28px] -translate-y-1/2 z-10 flex items-center justify-center w-7 h-7 rounded-full bg-white dark:bg-secondary border border-border shadow-sm text-foreground hover:bg-muted transition-colors"
+          className="absolute right-0 top-[28px] -translate-y-1/2 z-10 flex items-center justify-center w-7 h-7 rounded-full bg-card border border-border shadow-card text-foreground hover:bg-accent transition-colors"
         >
           <ChevronRight className="w-4 h-4" />
         </button>

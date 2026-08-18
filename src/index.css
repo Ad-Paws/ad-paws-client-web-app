@@ -5,6 +5,12 @@
 
 /* ====== CONFIG GLOBAL ====== */
 
+/*
+ * Nota sobre `src/tailwind.config.ts`: NO se carga.
+ * El proyecto usa Tailwind v4 con @tailwindcss/vite y no hay directiva @config,
+ * así que la única fuente de verdad del tema es este archivo.
+ */
+
 :root {
   /* ===== Base ===== */
   --font-sans: "sofia-pro", system-ui, sans-serif;
@@ -14,132 +20,181 @@
   --radius: 0.75rem;
 
   /* ===== Light theme ===== */
+  /*
+   * La base es un neutro frío teñido con el hue de marca (teal), no crema.
+   * El crema hacía que la tarjeta blanca desapareciera contra el fondo (1.05:1)
+   * y chocaba con los grises fríos que los inputs traían hardcodeados.
+   * El ámbar sigue existiendo, pero como acento de marca (brandAccent-*),
+   * no como el token `accent` de shadcn — que es superficie de hover.
+   */
 
   /* Background & Typography */
-  --background: #fff9ee;
-  --foreground: #1c3936;
+  --background: #f2f6f5;
+  --foreground: #0f2e2b; /* 14.5:1 sobre card */
 
   /* Surfaces */
   --card: #ffffff;
-  --card-foreground: #1c3936;
+  --card-foreground: #0f2e2b;
 
   --popover: #ffffff;
-  --popover-foreground: #1c3936;
+  --popover-foreground: #0f2e2b;
 
   /* Brand Actions */
-  --primary: #39726b;
+  --primary: #2f5f59; /* brand-600 · 7.24:1 sobre blanco (AAA) */
   --primary-foreground: #ffffff;
 
-  --secondary: #4d67a3;
+  --secondary: #3f5586; /* brandInfo-600 · rol de apoyo, no segundo primario */
   --secondary-foreground: #ffffff;
 
-  --accent: #e5a95d;
-  --accent-foreground: #1a1a1a;
+  /* `accent` en shadcn = superficie de hover (ghost, outline, menús). */
+  --accent: #e8efee;
+  --accent-foreground: #0f2e2b;
 
-  --destructive: #c06c86;
+  --destructive: #b42318; /* rojo real: un error debe leerse como error */
   --destructive-foreground: #ffffff;
 
   /* Neutral UI */
-  --muted: #f3efe6;
-  --muted-foreground: #6b7280;
+  --muted: #e8efee;
+  --muted-foreground: #5a6b69; /* teñido de teal, no gris frío de Tailwind */
 
-  --border: #e5ddd0;
-  --input: #e5ddd0;
-  --ring: #39726b;
+  --border: #dce5e3;
+  --input: #f7faf9;
+  --input-border: #dce5e3;
+  --ring: #2f5f59;
+
+  /* Estados semánticos */
+  --success: #0e5347;
+  --success-foreground: #ffffff;
+
+  --warning: #7c4a15;
+  --warning-foreground: #ffffff;
+
+  --info: #3f5586;
+  --info-foreground: #ffffff;
 
   /* Badges */
-  --badge-success: #d7ebe8;
-  --badge-success-foreground: #264c47;
+  --badge-success: #dcefe9;
+  --badge-success-foreground: #0e5347;
 
-  --badge-warning: #fae8cd;
-  --badge-warning-foreground: #5e3e1b;
+  --badge-warning: #fdf0d9;
+  --badge-warning-foreground: #7c4a15;
 
-  --badge-danger: #f9dde8;
-  --badge-danger-foreground: #653646;
+  --badge-danger: #fdeceb;
+  --badge-danger-foreground: #8f1d14;
+
+  --badge-info: #e6ebf7;
+  --badge-info-foreground: #32436a;
+
+  --badge-neutral: #e8efee;
+  --badge-neutral-foreground: #3d4f4d;
+
+  /* Elevación */
+  --shadow-card: 0 1px 2px rgba(15, 46, 43, 0.06), 0 1px 3px rgba(15, 46, 43, 0.04);
+  --shadow-raised: 0 4px 12px -2px rgba(15, 46, 43, 0.1), 0 2px 4px -2px rgba(15, 46, 43, 0.06);
+  --shadow-overlay: 0 12px 32px -8px rgba(15, 46, 43, 0.22);
 
   /* Charts */
-  --chart-1: #39726b;
-  --chart-2: #4d67a3;
-  --chart-3: #e5a95d;
-  --chart-4: #c06c86;
-  --chart-5: #1c3936;
+  --chart-1: #2f5f59;
+  --chart-2: #3f5586;
+  --chart-3: #a87538;
+  --chart-4: #b42318;
+  --chart-5: #61ad9f;
 
   /* Sidebar */
-  --sidebar: #eff6f5;
-  --sidebar-background: #eff6f5;
-  --sidebar-foreground: #1c3936;
+  --sidebar: #ffffff;
+  --sidebar-background: #ffffff;
+  --sidebar-foreground: #0f2e2b;
 
-  --sidebar-primary: #39726b;
+  --sidebar-primary: #2f5f59;
   --sidebar-primary-foreground: #ffffff;
 
-  --sidebar-accent: #e5a95d;
-  --sidebar-accent-foreground: #1a1a1a;
+  --sidebar-accent: #e8efee;
+  --sidebar-accent-foreground: #0f2e2b;
 
-  --sidebar-border: #d7ebe8;
-  --sidebar-ring: #39726b;
+  --sidebar-border: #dce5e3;
+  --sidebar-ring: #2f5f59;
 }
 
 /* ===== Dark theme ===== */
 /* Activado con la clase .dark en <html> */
 
 .dark {
-  --background: #263c3d;
-  --foreground: #fefae9;
+  --background: #1b2e2d;
+  --foreground: #f2f7f5;
 
-  --card: #2f4b4c;
-  --card-foreground: #fefae9;
+  --card: #243c3b;
+  --card-foreground: #f2f7f5;
 
-  --popover: #2f4b4c;
-  --popover-foreground: #fefae9;
+  --popover: #243c3b;
+  --popover-foreground: #f2f7f5;
 
-  --primary: #39726b;
-  --primary-foreground: #ffffff;
+  --primary: #63b5a9;
+  --primary-foreground: #0f2e2b;
 
-  --secondary: #4d67a3;
-  --secondary-foreground: #ffffff;
+  --secondary: #8ba8ec;
+  --secondary-foreground: #191f33;
 
-  --accent: #e5a95d;
-  --accent-foreground: #1a1a1a;
+  --accent: #2f4b4a;
+  --accent-foreground: #f2f7f5;
 
-  --destructive: #c06c86;
-  --destructive-foreground: #ffffff;
+  --destructive: #f99287;
+  --destructive-foreground: #2a0a07;
 
-  --muted: #355556;
-  --muted-foreground: #d8d3c3;
+  --muted: #2f4b4a;
+  --muted-foreground: #a3b5b2;
 
-  --border: #355556;
-  --input: #355556;
-  --ring: #39726b;
+  --border: #34504e;
+  --input: #1f3433;
+  --input-border: #34504e;
+  --ring: #63b5a9;
 
-  --badge-success: #39726b;
-  --badge-success-foreground: #ffffff;
+  --success: #6fc9b4;
+  --success-foreground: #06231d;
 
-  --badge-warning: #e5a95d;
-  --badge-warning-foreground: #1a1a1a;
+  --warning: #edb95f;
+  --warning-foreground: #2a1c06;
 
-  --badge-danger: #c06c86;
-  --badge-danger-foreground: #ffffff;
+  --info: #91a8e0;
+  --info-foreground: #10182e;
 
-  --chart-1: #39726b;
-  --chart-2: #4d67a3;
-  --chart-3: #e5a95d;
-  --chart-4: #c06c86;
-  --chart-5: #fefae9;
+  --badge-success: #17453c;
+  --badge-success-foreground: #8fdcc9;
 
-  --sidebar: #1f3233;
-  --sidebar-background: #1f3233;
-  --sidebar-foreground: #fefae9;
+  --badge-warning: #46320f;
+  --badge-warning-foreground: #f2cd8b;
 
-  --sidebar-primary: #39726b;
-  --sidebar-primary-foreground: #ffffff;
+  --badge-danger: #4d1a14;
+  --badge-danger-foreground: #f7a79e;
 
-  --sidebar-accent: #e5a95d;
-  --sidebar-accent-foreground: #1a1a1a;
+  --badge-info: #232f4d;
+  --badge-info-foreground: #b3c4ef;
 
-  --sidebar-border: #355556;
-  --sidebar-ring: #39726b;
+  --badge-neutral: #2f4b4a;
+  --badge-neutral-foreground: #c4d3d0;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+  --shadow-raised: 0 4px 12px -2px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-overlay: 0 12px 32px -8px rgba(0, 0, 0, 0.55);
+
+  --chart-1: #63b5a9;
+  --chart-2: #8ba8ec;
+  --chart-3: #edb95f;
+  --chart-4: #f99287;
+  --chart-5: #f2f7f5;
+
+  --sidebar: #162625;
+  --sidebar-background: #162625;
+  --sidebar-foreground: #f2f7f5;
+
+  --sidebar-primary: #63b5a9;
+  --sidebar-primary-foreground: #0f2e2b;
+
+  --sidebar-accent: #2f4b4a;
+  --sidebar-accent-foreground: #f2f7f5;
+
+  --sidebar-border: #34504e;
+  --sidebar-ring: #63b5a9;
 }
-
 
 /* Reseteo mínimo de body, el color ya lo maneja @layer base */
 body {
@@ -178,10 +233,38 @@ body {
   --color-accent-foreground: var(--accent-foreground);
 
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
 
   --color-border: var(--border);
   --color-input: var(--input);
+  --color-input-border: var(--input-border);
   --color-ring: var(--ring);
+
+  /* Badges */
+  --color-badge-success: var(--badge-success);
+  --color-badge-success-foreground: var(--badge-success-foreground);
+  --color-badge-warning: var(--badge-warning);
+  --color-badge-warning-foreground: var(--badge-warning-foreground);
+  --color-badge-danger: var(--badge-danger);
+  --color-badge-danger-foreground: var(--badge-danger-foreground);
+  --color-badge-info: var(--badge-info);
+  --color-badge-info-foreground: var(--badge-info-foreground);
+  --color-badge-neutral: var(--badge-neutral);
+  --color-badge-neutral-foreground: var(--badge-neutral-foreground);
+
+  /* Elevación: shadow-card / shadow-raised / shadow-overlay */
+  --shadow-card: var(--shadow-card);
+  --shadow-raised: var(--shadow-raised);
+  --shadow-overlay: var(--shadow-overlay);
 
   /* Brand palettes */
   --color-brand-50: #eff6f5;
@@ -228,21 +311,21 @@ body {
   --color-brandInfo-800: #25314e;
   --color-brandInfo-900: #191f33;
 
-  --color-brandAlert-50: #fdf2f6;
-  --color-brandAlert-100: #f9dde8;
-  --color-brandAlert-200: #f3b9d1;
-  --color-brandAlert-300: #ec94b9;
-  --color-brandAlert-400: #e76e9f;
-  --color-brandAlert-500: #c06c86;
-  --color-brandAlert-600: #a25a71;
-  --color-brandAlert-700: #84485c;
-  --color-brandAlert-800: #653646;
-  --color-brandAlert-900: #472432;
+  --color-brandAlert-50: #fdeceb;
+  --color-brandAlert-100: #fbd9d6;
+  --color-brandAlert-200: #f7a79e;
+  --color-brandAlert-300: #f27a6f;
+  --color-brandAlert-400: #e14a3c;
+  --color-brandAlert-500: #d92d20;
+  --color-brandAlert-600: #b42318;
+  --color-brandAlert-700: #8f1d14;
+  --color-brandAlert-800: #6b1610;
+  --color-brandAlert-900: #4d1a14;
 
-  --color-brandBg-soft: #fff9ee;
-  --color-brandBg-muted: #263c3d;
-  --color-brandBg-surface: #2f4b4c;
-  --color-brandBg-sidebar: #1f3233;
+  --color-brandBg-soft: #f2f6f5;
+  --color-brandBg-muted: #1b2e2d;
+  --color-brandBg-surface: #243c3b;
+  --color-brandBg-sidebar: #162625;
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -250,14 +333,16 @@ body {
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
-  --color-sidebar: hsl(var(--sidebar));
-  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
-  --color-sidebar-primary: hsl(var(--sidebar-primary));
-  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
-  --color-sidebar-accent: hsl(var(--sidebar-accent));
-  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
-  --color-sidebar-border: hsl(var(--sidebar-border));
-  --color-sidebar-ring: hsl(var(--sidebar-ring));
+  /* Los tokens de sidebar son hex, no canales HSL:
+     envolverlos en hsl() los invalidaba por completo. */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
 
   --font-sans: var(--font-sans);
   --font-heading: var(--font-heading);

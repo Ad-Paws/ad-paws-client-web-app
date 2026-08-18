@@ -134,7 +134,7 @@ export const FormDateRangePicker = React.forwardRef<
               "flex w-full items-center gap-2 rounded-md border px-3 py-2 text-sm text-left",
               "h-9 min-w-0 shadow-xs transition-[color,box-shadow] outline-none",
               // Colors matching input
-              "bg-[#F9FAFB] border-[#F3F4F6]",
+              "bg-input border-input-border",
               "dark:bg-input/30 dark:border-input",
               // Focus states
               "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
@@ -143,13 +143,13 @@ export const FormDateRangePicker = React.forwardRef<
               // Disabled states
               "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
               // Placeholder color when no value
-              !displayValue && "text-[#9CA3AF]",
+              !displayValue && "text-muted-foreground",
               // Cursor
               "cursor-pointer",
               className
             )}
           >
-            <CalendarIcon className="h-4 w-4 shrink-0 text-[#9CA3AF]" />
+            <CalendarIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="flex-1 truncate">
               {displayValue || placeholder}
             </span>
