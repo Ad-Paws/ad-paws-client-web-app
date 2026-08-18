@@ -9,8 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import Logo from "@/components/Logo";
 import { COMPANY_BY_SLUG, JOIN_COMPANY } from "@/graphql/company";
+import { CREATE_DOG, UPLOAD_DOG_IMAGE } from "@/graphql/dogs";
 import { useAuth } from "@/contexts/AuthContext";
 import { messageFor } from "@/lib/api/errors";
+import {
+  clearPendingDogs,
+  readPendingDogs,
+  readPendingPhoto,
+} from "@/lib/pendingDogs";
+import { setCompanyId } from "@/lib/session";
 
 /**
  * Vinculación con un negocio para una cuenta que aún no pertenece a ninguno.
@@ -25,15 +32,54 @@ export default function LinkCompany() {
   const { refetchUser, logout } = useAuth();
   const [slug, setSlug] = useState("");
   const [notFound, setNotFound] = useState(false);
+  /**
+   * Cubre la ventana entre "la mutación respondió" y "ya navegamos".
+   *
+   * `joining` de Apollo se apaga en cuanto llega la respuesta, pero después
+   * todavía quedan los perros pendientes y el refetch. Sin este estado el
+   * botón se volvía a habilitar en medio de eso y aceptaba un segundo click.
+   * Nunca se apaga: en el camino feliz esta pantalla desaparece.
+   */
+  const [finishing, setFinishing] = useState(false);
 
   const [search, { data, loading: searching }] = useLazyQuery(COMPANY_BY_SLUG, {
     fetchPolicy: "network-only",
   });
 
+  const [createDog] = useMutation(CREATE_DOG);
+  const [uploadDogImage] = useMutation(UPLOAD_DOG_IMAGE);
+
   const [joinCompany, { loading: joining, error: joinError }] = useMutation(
     JOIN_COMPANY,
     {
-      onCompleted: async () => {
+      // Un fallo devuelve el control: el usuario tiene que poder reintentar.
+      onError: () => setFinishing(false),
+      onCompleted: async (result) => {
+        setFinishing(true);
+        /**
+         * La empresa activa se fija ANTES de crear los perros. El actor se
+         * resuelve al inicio de cada petición, así que sin este header la
+         * siguiente llamada seguiría creyendo que la cuenta no pertenece a
+         * ningún negocio.
+         */
+        setCompanyId(result.joinCompany.company.id);
+
+        // Los perros capturados en el alta sin slug esperaban este momento.
+        const pending = readPendingDogs();
+        for (const [index, input] of pending.entries()) {
+          try {
+            const created = await createDog({ variables: { input } });
+            const dogId = created.data?.createDog.id;
+            const photo = readPendingPhoto(index);
+            if (dogId && photo) {
+              await uploadDogImage({ variables: { id: dogId, file: photo } });
+            }
+          } catch (error) {
+            console.error("No se pudo registrar un perro pendiente:", error);
+          }
+        }
+        clearPendingDogs();
+
         await refetchUser();
         navigate("/inicio", { replace: true });
       },
@@ -87,7 +133,7 @@ export default function LinkCompany() {
               type="submit"
               variant="outline"
               className="rounded-full h-11"
-              disabled={searching || !slug.trim()}
+              disabled={searching || finishing || joining || !slug.trim()}
             >
               {searching ? <Spinner className="size-4" /> : "Buscar negocio"}
             </Button>
@@ -124,12 +170,12 @@ export default function LinkCompany() {
               <Button
                 type="button"
                 className="rounded-full h-11"
-                disabled={joining}
+                disabled={joining || finishing}
                 onClick={() =>
                   void joinCompany({ variables: { slug: company.slug } })
                 }
               >
-                {joining ? (
+                {joining || finishing ? (
                   <Spinner className="size-4" />
                 ) : (
                   <>

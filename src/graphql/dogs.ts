@@ -30,6 +30,15 @@ export const DOG = graphql(`
       weightKg
       imageUrl
       notes
+      contacts {
+        id
+        type
+        name
+        phone
+        email
+        relation
+        notes
+      }
       primaryOwner {
         id
         name
@@ -56,5 +65,64 @@ export const CREATE_DOG = graphql(`
       breed
       imageUrl
     }
+  }
+`);
+
+/** `updateDog(input)` pasó a `updateDog(id, input)`: el id salió del input. */
+export const UPDATE_DOG = graphql(`
+  mutation UpdateDog($id: ID!, $input: UpdateDogInput!) {
+    updateDog(id: $id, input: $input) {
+      id
+      name
+      breed
+      birthDate
+      gender
+      color
+      size
+      weightKg
+      imageUrl
+      notes
+    }
+  }
+`);
+
+/**
+ * La foto se sube aparte, cuando el perro ya tiene id — por eso no es parte de
+ * `CreateDogInput`. Va como multipart, que es lo que exige el `UploadHttpLink`
+ * con el header de preflight.
+ */
+export const UPLOAD_DOG_IMAGE = graphql(`
+  mutation UploadDogImage($id: ID!, $file: Upload!) {
+    uploadDogImage(id: $id, file: $file) {
+      id
+      imageUrl
+    }
+  }
+`);
+
+/**
+ * Contactos del perro: veterinario, emergencia y quién puede recogerlo.
+ *
+ * Son datos que antes vivían en la cabeza de quien atiende el mostrador. Que
+ * el dueño los cargue desde su app es la única forma de que estén cuando
+ * hacen falta.
+ */
+export const ADD_DOG_CONTACT = graphql(`
+  mutation AddDogContact($dogId: ID!, $input: DogContactInput!) {
+    addDogContact(dogId: $dogId, input: $input) {
+      id
+      type
+      name
+      phone
+      email
+      relation
+      notes
+    }
+  }
+`);
+
+export const REMOVE_DOG_CONTACT = graphql(`
+  mutation RemoveDogContact($id: ID!) {
+    removeDogContact(id: $id)
   }
 `);

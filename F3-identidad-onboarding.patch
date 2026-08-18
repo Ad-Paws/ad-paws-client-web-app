@@ -1,0 +1,2793 @@
+From 79f9d854f5ee4d7c1e42a8dc05ebd535fd3bd815 Mon Sep 17 00:00:00 2001
+From: Claude <claude@adpaws>
+Date: Mon, 17 Aug 2026 23:00:23 +0000
+Subject: [PATCH] =?UTF-8?q?F3:=20identidad,=20onboarding=20con=20slug=20y?=
+ =?UTF-8?q?=20recuperaci=C3=B3n=20de=20contrase=C3=B1a?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+El login no terminaba: AuthContext pedía user { … company { … } }, que el
+backend nuevo ya no expone. La empresa dejó de colgar del usuario y se resuelve
+por membresía, así que el contexto se reescribe sobre me + myCompanies.
+
+Onboarding
+- El registro vive en /registro-cliente?empresa=<slug>. El slug se manda en
+  createUser y es lo que convierte la cuenta en cliente de un negocio; sin él
+  el usuario queda sin membresía y createDog ni siquiera es posible.
+- companyBySlug pinta el negocio antes de teclear nada: un slug mal escrito que
+  vincula en silencio es un error que el usuario no puede deshacer solo.
+- /vincular-negocio resuelve el caso de quien se registró sin slug, con
+  joinCompany.
+- ProtectedRoute distingue "sin sesión" de "con sesión y sin negocio". Mandar
+  al login al segundo lo dejaría en un bucle: volvería a entrar igual de
+  huérfano.
+
+Alta de perros
+- createDogs en bulk ya no existe: van uno por uno, y los tokens que devuelve
+  createUser se guardan ANTES del primero porque createDog exige sesión.
+- Si uno falla a mitad, se dice cuál y se sigue. Reintentar la cuenta daría
+  "ese correo ya está registrado" y dejaría al usuario atorado.
+
+Contraseñas
+- Recuperación y cambio, que no existían. Los links del correo apuntan a esta
+  app vía app: CLIENT.
+- La política del formulario pasa de 8 caracteres a la real del servidor: 10
+  con letras y números. Antes una contraseña válida en la UI moría con
+  VALIDATION_ERROR al enviarse.
+
+Enums
+- Gender pasa a MALE/FEMALE/OTHER en usuario y perro. El tipo de DogFormValues
+  declaraba minúsculas mientras el formulario ya guardaba mayúsculas.
+- weight: Float -> weightKg: String. El parseInt anterior tiraba los gramos:
+  8.4 kg se guardaba como 8.
+
+El aviso de verificación no bloquea, por decisión de producto — y aunque
+bloqueara en la UI no sería una frontera: el servidor acepta hoy a un usuario
+INCOMPLETE igual que a uno activo.
+
+user.api.ts se elimina: todas sus operaciones están migradas a src/graphql/.
+---
+ package.json                                  |   1 +
+ .../Form/Forms/ChangePasswordForm.tsx         | 106 +++++++
+ .../Form/Forms/ClientSignupStep2Form.tsx      |  12 +-
+ .../Form/Forms/ClientSignupStep3Form.tsx      |   6 +-
+ .../Form/Forms/SignupSuccessScreen.tsx        |  40 ++-
+ src/components/Form/Forms/UserInfoForm.tsx    |  28 +-
+ src/components/ProtectedRoute.tsx             |  36 ++-
+ src/components/StatsigWrapper.tsx             |  13 +-
+ src/components/VerifyEmailBanner.tsx          |  28 ++
+ src/contexts/AuthContext.tsx                  | 263 ++++++++--------
+ src/generated/gql.ts                          |  54 ++++
+ src/generated/graphql.ts                      | 182 ++++++++++-
+ src/graphql/company.ts                        |  42 +++
+ src/graphql/dogs.ts                           |  18 ++
+ src/graphql/user.ts                           |  68 +++++
+ src/layouts/DashboardLayout.tsx               |   2 +
+ src/lib/api/dogs.api.ts                       |  41 ---
+ src/lib/api/user.api.ts                       |  89 ------
+ src/lib/password.ts                           |  25 ++
+ src/pages/authentication/ClientSignup.tsx     | 288 ++++++++++--------
+ .../authentication/RequestPasswordReset.tsx   | 114 +++++++
+ src/pages/authentication/ResetPassword.tsx    | 145 +++++++++
+ src/pages/authentication/VerifyEmail.tsx      |  37 ++-
+ src/pages/authentication/login.tsx            |  16 +-
+ src/pages/onboarding/LinkCompany.tsx          | 160 ++++++++++
+ src/pages/profile/Profile.tsx                 | 120 ++++++--
+ src/routes.tsx                                |  34 ++-
+ src/utils/translators.ts                      |  39 ++-
+ 28 files changed, 1497 insertions(+), 510 deletions(-)
+ create mode 100644 src/components/Form/Forms/ChangePasswordForm.tsx
+ create mode 100644 src/components/VerifyEmailBanner.tsx
+ create mode 100644 src/graphql/company.ts
+ delete mode 100644 src/lib/api/user.api.ts
+ create mode 100644 src/lib/password.ts
+ create mode 100644 src/pages/authentication/RequestPasswordReset.tsx
+ create mode 100644 src/pages/authentication/ResetPassword.tsx
+ create mode 100644 src/pages/onboarding/LinkCompany.tsx
+
+diff --git a/package.json b/package.json
+index fed47e2..cac4a93 100644
+--- a/package.json
++++ b/package.json
+@@ -58,6 +58,7 @@
+     "@graphql-codegen/cli": "^7.2.0",
+     "@graphql-codegen/client-preset": "^6.1.3",
+     "@graphql-codegen/typescript": "^6.1.0",
++    "@graphql-typed-document-node/core": "^3.2.0",
+     "@types/apollo-upload-client": "^17.0.5",
+     "@types/node": "^24.10.1",
+     "@types/react": "^19.2.5",
+diff --git a/src/components/Form/Forms/ChangePasswordForm.tsx b/src/components/Form/Forms/ChangePasswordForm.tsx
+new file mode 100644
+index 0000000..ccbc56e
+--- /dev/null
++++ b/src/components/Form/Forms/ChangePasswordForm.tsx
+@@ -0,0 +1,106 @@
++import { useState } from "react";
++import { useMutation } from "@apollo/client/react";
++import { Check } from "lucide-react";
++import { Button } from "@/components/ui/button";
++import { Input } from "@/components/ui/input";
++import { Spinner } from "@/components/ui/spinner";
++import { CHANGE_PASSWORD } from "@/graphql/user";
++import { messageFor } from "@/lib/api/errors";
++import { PASSWORD_HINT, validatePassword } from "@/lib/password";
++
++interface ChangePasswordFormProps {
++  onDone: () => void;
++}
++
++/**
++ * Cambio de contraseña.
++ *
++ * Pide la actual porque el servidor la exige: cambiar una contraseña conocida
++ * requiere demostrar que se conoce. Al terminar, el backend cierra la sesión
++ * en los OTROS dispositivos y deja vivo el actual, así que aquí no hay que
++ * hacer nada con los tokens.
++ */
++export default function ChangePasswordForm({ onDone }: ChangePasswordFormProps) {
++  const [currentPassword, setCurrentPassword] = useState("");
++  const [newPassword, setNewPassword] = useState("");
++  const [done, setDone] = useState(false);
++
++  const [changePassword, { loading, error }] = useMutation(CHANGE_PASSWORD, {
++    onCompleted: () => {
++      setDone(true);
++      setCurrentPassword("");
++      setNewPassword("");
++      setTimeout(onDone, 1800);
++    },
++  });
++
++  const policyError = newPassword ? validatePassword(newPassword) : null;
++  const sameAsCurrent =
++    Boolean(newPassword) && newPassword === currentPassword
++      ? "La nueva contraseña debe ser distinta de la actual."
++      : null;
++  const localError = policyError ?? sameAsCurrent;
++
++  if (done) {
++    return (
++      <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-3.5">
++        <Check className="h-4 w-4 text-primary" />
++        <p className="text-sm text-foreground">
++          Contraseña actualizada. Cerramos la sesión en tus otros dispositivos.
++        </p>
++      </div>
++    );
++  }
++
++  return (
++    <form
++      className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4"
++      onSubmit={(event) => {
++        event.preventDefault();
++        if (localError) return;
++        void changePassword({ variables: { input: { currentPassword, newPassword } } });
++      }}
++    >
++      <Input
++        type="password"
++        required
++        value={currentPassword}
++        onChange={(e) => setCurrentPassword(e.target.value)}
++        placeholder="Contraseña actual"
++        aria-label="Contraseña actual"
++      />
++      <Input
++        type="password"
++        required
++        value={newPassword}
++        onChange={(e) => setNewPassword(e.target.value)}
++        placeholder="Nueva contraseña"
++        aria-label="Nueva contraseña"
++      />
++      <p className="px-1 text-xs text-muted-foreground">{PASSWORD_HINT}</p>
++
++      {localError && <p className="text-sm text-destructive">{localError}</p>}
++      {error && !localError && (
++        <p className="text-sm text-destructive">{messageFor(error)}</p>
++      )}
++
++      <div className="flex gap-2">
++        <Button
++          type="button"
++          variant="outline"
++          className="flex-1 rounded-full"
++          onClick={onDone}
++        >
++          Cancelar
++        </Button>
++        <Button
++          type="submit"
++          className="flex-1 rounded-full"
++          disabled={loading || !currentPassword || !newPassword || localError !== null}
++        >
++          {loading ? <Spinner className="size-4" /> : "Guardar"}
++        </Button>
++      </div>
++    </form>
++  );
++}
+diff --git a/src/components/Form/Forms/ClientSignupStep2Form.tsx b/src/components/Form/Forms/ClientSignupStep2Form.tsx
+index d610bc8..2a7ecf1 100644
+--- a/src/components/Form/Forms/ClientSignupStep2Form.tsx
++++ b/src/components/Form/Forms/ClientSignupStep2Form.tsx
+@@ -25,8 +25,10 @@ export interface DogFormValues {
+   name: string;
+   breed: string;
+   color: string;
+-  size: "small" | "medium" | "large" | "xlarge" | "";
+-  gender: "male" | "female" | "";
++  /** Valores del schema. El tipo declaraba minúsculas y el formulario
++   * guardaba mayúsculas: mentía sobre lo que realmente contenía. */
++  size: "SMALL" | "MEDIUM" | "LARGE" | "GIGANTIC" | "";
++  gender: "MALE" | "FEMALE" | "";
+   weight: string;
+   birthDate: Date | undefined;
+ }
+@@ -37,7 +39,7 @@ interface SizeOption {
+ }
+ 
+ interface GenderOption {
+-  value: "Male" | "Female";
++  value: "MALE" | "FEMALE";
+   label: string;
+ }
+ 
+@@ -49,8 +51,8 @@ const sizeOptions: SizeOption[] = [
+ ];
+ 
+ const genderOptions: GenderOption[] = [
+-  { value: "Male", label: "Macho" },
+-  { value: "Female", label: "Hembra" },
++  { value: "MALE", label: "Macho" },
++  { value: "FEMALE", label: "Hembra" },
+ ];
+ 
+ interface ClientSignupStep2FormProps {
+diff --git a/src/components/Form/Forms/ClientSignupStep3Form.tsx b/src/components/Form/Forms/ClientSignupStep3Form.tsx
+index 35ee87d..dea49fc 100644
+--- a/src/components/Form/Forms/ClientSignupStep3Form.tsx
++++ b/src/components/Form/Forms/ClientSignupStep3Form.tsx
+@@ -15,9 +15,9 @@ interface ClientSignupStep3FormProps {
+ }
+ 
+ const genderLabels: Record<string, string> = {
+-  Female: "Femenino",
+-  Male: "Masculino",
+-  Other: "Otro",
++  FEMALE: "Femenino",
++  MALE: "Masculino",
++  OTHER: "Otro",
+ };
+ 
+ const dogGenderLabels: Record<string, string> = {
+diff --git a/src/components/Form/Forms/SignupSuccessScreen.tsx b/src/components/Form/Forms/SignupSuccessScreen.tsx
+index 6cbeecb..f288b99 100644
+--- a/src/components/Form/Forms/SignupSuccessScreen.tsx
++++ b/src/components/Form/Forms/SignupSuccessScreen.tsx
+@@ -5,51 +5,65 @@ import { useAuth } from "@/contexts/AuthContext";
+ 
+ interface SignupSuccessScreenProps {
+   onGoHome?: () => void;
++  /** Aviso cuando algo secundario falló — un perro que no se guardó. */
++  notice?: string | null;
++  /** El alta no traía negocio: hay que vincularlo antes de usar la app. */
++  needsCompany?: boolean;
+ }
+ 
+-const SignupSuccessScreen = ({ onGoHome }: SignupSuccessScreenProps) => {
++const SignupSuccessScreen = ({
++  onGoHome,
++  notice,
++  needsCompany = false,
++}: SignupSuccessScreenProps) => {
+   const navigate = useNavigate();
+   const { login } = useAuth();
+ 
++  /**
++   * Los tokens ya se guardaron al crear la cuenta, así que `login()` sólo
++   * carga al usuario: no hace falta pasar por el formulario de acceso.
++   */
+   const handleGoHome = async () => {
+     if (onGoHome) {
+       onGoHome();
+-    } else {
+-      await login();
+-      navigate("/inicio");
++      return;
+     }
++    await login();
++    navigate(needsCompany ? "/vincular-negocio" : "/inicio");
+   };
+ 
+   return (
+     <div className="min-h-dvh w-full bg-background flex flex-col">
+-      {/* Main content centered */}
+       <main className="flex-1 flex flex-col items-center justify-center px-6 pb-8">
+-        {/* Success Icon */}
+         <div className="w-28 h-28 rounded-full bg-primary flex items-center justify-center mb-8 shadow-lg shadow-primary/20">
+           <Check className="w-14 h-14 text-white stroke-[3]" />
+         </div>
+ 
+-        {/* Title */}
+         <h1 className="text-3xl font-bold text-brandInfo-700 dark:text-brandAccent-400 font-bookmania mb-3 text-center">
+           ¡Todo listo!
+         </h1>
+ 
+-        {/* Subtitle */}
+         <p className="text-muted-foreground text-center max-w-xs leading-relaxed">
+-          Revisa tu correo y confirma tu cuenta para empezar a cuidar a tu mejor
+-          amigo.
++          {needsCompany
++            ? "Antes de empezar, vincula tu cuenta con la guardería u hotel donde llevas a tu perro."
++            : "Revisa tu correo y confirma tu cuenta para empezar a cuidar a tu mejor amigo."}
+         </p>
++
++        {notice && (
++          <p className="mt-5 max-w-xs rounded-xl border border-amber-300/60 bg-amber-50 px-3.5 py-2.5 text-center text-xs leading-relaxed text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
++            {notice}
++          </p>
++        )}
+       </main>
+ 
+-      {/* Button at bottom */}
+       <div className="px-6 pb-8">
+         <Button
+           type="button"
+           size="lg"
+-          onClick={handleGoHome}
++          onClick={() => void handleGoHome()}
+           className="w-full bg-accent hover:bg-accent/90 text-accent-foreground rounded-full h-12 text-base font-semibold"
+         >
+-          Ir al inicio
++          {needsCompany ? "Vincular mi negocio" : "Ir al inicio"}
+         </Button>
+       </div>
+     </div>
+diff --git a/src/components/Form/Forms/UserInfoForm.tsx b/src/components/Form/Forms/UserInfoForm.tsx
+index 86006c1..6c29bb3 100644
+--- a/src/components/Form/Forms/UserInfoForm.tsx
++++ b/src/components/Form/Forms/UserInfoForm.tsx
+@@ -9,26 +9,30 @@ import { Input } from "@/components/ui/input";
+ import { Button } from "@/components/ui/button";
+ import { useForm } from "react-hook-form";
+ import { cn } from "@/lib/utils";
++import { PASSWORD_HINT, validatePassword } from "@/lib/password";
++
++/** El enum del schema, en mayúsculas: el backend rechaza "Male". */
++export type GenderValue = "FEMALE" | "MALE" | "OTHER";
+ 
+ export interface UserInfoFormValues {
+   name: string;
+   lastname: string;
+   birthdate: Date | undefined;
+-  gender: "Female" | "Male" | "Other" | "";
++  gender: GenderValue | "";
+   email: string;
+   password?: string;
+   phone: string;
+ }
+ 
+ interface GenderOption {
+-  value: "Female" | "Male" | "Other";
++  value: GenderValue;
+   label: string;
+ }
+ 
+ const genderOptions: GenderOption[] = [
+-  { value: "Female", label: "Femenino" },
+-  { value: "Male", label: "Masculino" },
+-  { value: "Other", label: "Otro" },
++  { value: "FEMALE", label: "Femenino" },
++  { value: "MALE", label: "Masculino" },
++  { value: "OTHER", label: "Otro" },
+ ];
+ 
+ interface UserInfoFormProps {
+@@ -192,20 +196,16 @@ export function UserInfoForm({
+             name="password"
+             rules={{
+               required: "La contraseña es requerida",
+-              minLength: {
+-                value: 8,
+-                message: "La contraseña debe tener al menos 8 caracteres",
+-              },
++              // La misma regla que aplica el servidor. Antes pedía 8 sin
++              // exigir dígitos, así que una contraseña válida en la UI moría
++              // con VALIDATION_ERROR al enviarse.
++              validate: (value: string) => validatePassword(value) ?? true,
+             }}
+             render={({ field }) => (
+               <FormItem className="gap-2">
+                 <FormLabel className="px-4">Contraseña</FormLabel>
+                 <FormControl>
+-                  <Input
+-                    type="password"
+-                    placeholder="Mínimo 8 caracteres"
+-                    {...field}
+-                  />
++                  <Input type="password" placeholder={PASSWORD_HINT} {...field} />
+                 </FormControl>
+                 <FormMessage />
+               </FormItem>
+diff --git a/src/components/ProtectedRoute.tsx b/src/components/ProtectedRoute.tsx
+index b745c0a..158a1fc 100644
+--- a/src/components/ProtectedRoute.tsx
++++ b/src/components/ProtectedRoute.tsx
+@@ -1,32 +1,48 @@
+ import { Navigate, useLocation } from "react-router-dom";
+ import { useAuth } from "@/contexts/AuthContext";
++import { Spinner } from "@/components/ui/spinner";
+ 
+ interface ProtectedRouteProps {
+   children: React.ReactNode;
++  /**
++   * Para las pantallas que sí funcionan sin negocio: vincularse a uno, el
++   * perfil, cerrar sesión. Sin esto, un usuario sin membresía quedaría en un
++   * bucle de redirecciones hacia la pantalla que necesita visitar.
++   */
++  allowWithoutCompany?: boolean;
+ }
+ 
+-export function ProtectedRoute({ children }: ProtectedRouteProps) {
+-  const { isAuthenticated, isLoading } = useAuth();
++export function ProtectedRoute({
++  children,
++  allowWithoutCompany = false,
++}: ProtectedRouteProps) {
++  const { isAuthenticated, isLoading, membershipState } = useAuth();
+   const location = useLocation();
+ 
+-  // Show loading state while checking authentication
+   if (isLoading) {
+     return (
+-      <div className="flex h-screen w-screen items-center justify-center">
+-        <div className="text-center">
+-          <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4"></div>
+-          <p className="text-muted-foreground">Cargando...</p>
++      <div className="flex h-dvh w-full items-center justify-center">
++        <div className="flex flex-col items-center gap-3">
++          <Spinner className="size-8 text-primary" />
++          <p className="text-sm text-muted-foreground">Cargando…</p>
+         </div>
+       </div>
+     );
+   }
+ 
+-  // Redirect to login if not authenticated
+   if (!isAuthenticated) {
+-    // Save the location they were trying to access for redirect after login
+     return <Navigate to="/auth/login" state={{ from: location }} replace />;
+   }
+ 
+-  // User is authenticated, render children
++  /**
++   * Autenticado pero sin negocio no es un error de sesión: la cuenta existe,
++   * sólo que el backend no tiene contra qué empresa resolver sus datos.
++   * Mandarlo al login —que es lo que haría un guardia de un solo estado— lo
++   * dejaría dando vueltas, porque volvería a entrar igual de huérfano.
++   */
++  if (membershipState === "none" && !allowWithoutCompany) {
++    return <Navigate to="/vincular-negocio" replace />;
++  }
++
+   return <>{children}</>;
+ }
+diff --git a/src/components/StatsigWrapper.tsx b/src/components/StatsigWrapper.tsx
+index 3caa116..d034e58 100644
+--- a/src/components/StatsigWrapper.tsx
++++ b/src/components/StatsigWrapper.tsx
+@@ -13,7 +13,7 @@ interface StatsigWrapperProps {
+  * It ensures that analytics and feature flags are properly tracked per user.
+  */
+ export function StatsigWrapper({ children }: StatsigWrapperProps) {
+-  const { user, company, isAuthenticated } = useAuth();
++  const { user, activeCompany, isAuthenticated } = useAuth();
+   const { client } = useStatsigClient();
+ 
+   useEffect(() => {
+@@ -26,11 +26,12 @@ export function StatsigWrapper({ children }: StatsigWrapperProps) {
+         await client.updateUserAsync({
+           userID: user.id || "anonymous",
+           email: user.email,
++          // `custom` sólo acepta primitivos: un null aquí revienta el SDK.
+           custom: {
+-            name: user.name,
+-            companyId: company?.id,
+-            companyName: company?.name,
+-            companyUUID: company?.uuid,
++            name: user.name ?? "",
++            companyId: activeCompany?.id ?? "",
++            companyName: activeCompany?.name ?? "",
++            companySlug: activeCompany?.slug ?? "",
+           },
+         });
+       } else {
+@@ -42,7 +43,7 @@ export function StatsigWrapper({ children }: StatsigWrapperProps) {
+     };
+ 
+     updateStatsigUser();
+-  }, [user, company, isAuthenticated, client]);
++  }, [user, activeCompany, isAuthenticated, client]);
+ 
+   return <>{children}</>;
+ }
+diff --git a/src/components/VerifyEmailBanner.tsx b/src/components/VerifyEmailBanner.tsx
+new file mode 100644
+index 0000000..2318e56
+--- /dev/null
++++ b/src/components/VerifyEmailBanner.tsx
+@@ -0,0 +1,28 @@
++import { MailWarning } from "lucide-react";
++import { useAuth } from "@/contexts/AuthContext";
++
++/**
++ * Aviso de cuenta sin verificar.
++ *
++ * No bloquea: por decisión de producto el usuario opera con normalidad
++ * mientras tanto. Vale la pena decir por qué no es sólo pereza — bloquear en
++ * la interfaz no sería una frontera de nada, porque el servidor hoy acepta a
++ * un usuario INCOMPLETE igual que a uno activo. El día que se quiera bloquear
++ * de verdad, el cambio va en el backend.
++ */
++export default function VerifyEmailBanner() {
++  const { user } = useAuth();
++
++  if (!user || user.emailVerifiedAt) return null;
++
++  return (
++    <div className="mx-6 mt-3 flex items-start gap-2.5 rounded-xl border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 px-3.5 py-2.5">
++      <MailWarning className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
++      <p className="text-xs leading-relaxed text-amber-900 dark:text-amber-200">
++        Te enviamos un correo a{" "}
++        <span className="font-semibold">{user.email}</span> para confirmar tu
++        cuenta. Búscalo cuando puedas — el link caduca en 24 horas.
++      </p>
++    </div>
++  );
++}
+diff --git a/src/contexts/AuthContext.tsx b/src/contexts/AuthContext.tsx
+index c6dd034..9468a25 100644
+--- a/src/contexts/AuthContext.tsx
++++ b/src/contexts/AuthContext.tsx
+@@ -1,205 +1,200 @@
+ /* eslint-disable react-refresh/only-export-components */
+ import React, {
+   createContext,
++  useCallback,
+   useContext,
+-  useState,
+   useEffect,
+-  useCallback,
++  useMemo,
++  useState,
+ } from "react";
+ import { apolloClient } from "@/lib/api/apolloClient";
+-import { USER_QUERY } from "@/lib/api/user.api";
+-import { LOGOUT } from "@/graphql/user";
+-import { clearSession, getRefreshToken, onSessionCleared } from "@/lib/session";
+-
+-// TODO(F1): el almacenamiento de sesión se reescribe con Bearer + refreshSession.
+-const USER_DATA_KEY = "userData";
+-
+-// Types
+-export interface User {
+-  id?: string;
+-  email?: string;
+-  name?: string;
+-  company?: Company;
+-  // Add more user properties as needed
+-}
++import { ME, MY_COMPANIES, LOGOUT } from "@/graphql/user";
++import {
++  clearSession,
++  getCompanyId,
++  getRefreshToken,
++  hasSession,
++  onSessionCleared,
++  setCompanyId,
++  setTokens,
++  type TokenPair,
++} from "@/lib/session";
++import type { MeQuery, MyCompaniesQuery } from "@/generated/graphql";
++
++export type User = NonNullable<MeQuery["me"]>;
++export type Company = MyCompaniesQuery["myCompanies"][number];
++
++/**
++ * En qué situación está la cuenta respecto a los negocios.
++ *
++ * No es un detalle cosmético: el backend resuelve cada petición contra UNA
++ * empresa activa, y sin ella todo lo que toque datos de negocio responde
++ * TENANT_CONTEXT_REQUIRED. Una cuenta recién creada sin slug cae justo ahí,
++ * así que la app necesita distinguir "no ha iniciado sesión" de "inició
++ * sesión pero todavía no pertenece a ningún negocio".
++ */
++export type MembershipState = "none" | "single" | "multiple";
+ 
+-export interface Company {
+-  id: string;
+-  logoUrl: string;
+-  name: string;
+-  ownerId: string;
+-  uuid: string;
+-}
+ export interface AuthContextValue {
+   user: User | null;
++  companies: Company[];
++  activeCompany: Company | null;
++  membershipState: MembershipState;
+   isAuthenticated: boolean;
+   isLoading: boolean;
+-  login: (userData?: User) => Promise<void>;
+-  logout: () => void;
+-  updateUser: (userData: User) => void;
++  /** Guarda los tokens y carga al usuario. */
++  login: (tokens?: TokenPair) => Promise<void>;
++  logout: () => Promise<void>;
+   refetchUser: () => Promise<void>;
+-  company: Company | null;
++  selectCompany: (companyId: string) => void;
+ }
+ 
+-// Create Context
+ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+ 
+-// Provider Props
+ interface AuthProviderProps {
+   children: React.ReactNode;
+ }
+ 
+-// Provider Component
+ export function AuthProvider({ children }: AuthProviderProps) {
+   const [user, setUser] = useState<User | null>(null);
+-  const [company, setCompany] = useState<Company | null>(null);
++  const [companies, setCompanies] = useState<Company[]>([]);
++  const [activeCompanyId, setActiveCompanyId] = useState<string | null>(getCompanyId);
+   const [isLoading, setIsLoading] = useState(true);
+ 
+-  // Fetch user data from API
+-  const fetchUserData = useCallback(async () => {
+-    try {
+-      const { data } = await apolloClient.query<{
+-        user: { id: string; email: string; name: string; company: Company };
+-      }>({
+-        query: USER_QUERY,
+-        fetchPolicy: "network-only", // Always fetch fresh data
+-      });
+-
+-      if (data?.user) {
+-        const userData: User = {
+-          id: data.user.id,
+-          email: data.user.email,
+-          name: data.user.name,
+-        };
+-        const companyData: Company = {
+-          id: data.user.company.id,
+-          logoUrl: data.user.company.logoUrl,
+-          name: data.user.company.name,
+-          ownerId: data.user.company.ownerId,
+-          uuid: data.user.company.uuid,
+-        };
+-        // Update state and localStorage
+-        setUser(userData);
+-        setCompany(companyData);
+-        localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
+-
+-        return userData;
+-      }
+-    } catch (error) {
+-      console.error("Failed to fetch user data:", error);
+-      // If fetch fails (e.g., cookie expired or invalid), clear auth data
+-      localStorage.removeItem(USER_DATA_KEY);
+-      setUser(null);
+-      throw error;
+-    }
++  /**
++   * `me` y `myCompanies` son de las pocas operaciones que funcionan SIN empresa
++   * activa (`@auth` a secas). Por eso sirven para arrancar: son lo único que
++   * se puede preguntar antes de saber si la cuenta pertenece a algún negocio.
++   */
++  const fetchUser = useCallback(async () => {
++    const [me, mine] = await Promise.all([
++      apolloClient.query({ query: ME, fetchPolicy: "network-only" }),
++      apolloClient.query({ query: MY_COMPANIES, fetchPolicy: "network-only" }),
++    ]);
++
++    const nextUser = me.data?.me ?? null;
++    const nextCompanies = mine.data?.myCompanies ?? [];
++
++    setUser(nextUser);
++    setCompanies(nextCompanies);
++
++    /**
++     * Con una sola membresía el header es opcional —el servidor la deduce—
++     * pero se fija igual: el día que la persona gane una segunda, un cliente
++     * que nunca mandó el header empieza a fallar sin que nadie haya tocado
++     * nada. Si la guardada ya no está entre las suyas, se descarta.
++     */
++    const stored = getCompanyId();
++    const valid = nextCompanies.some((c) => c.id === stored);
++    const resolved = valid ? stored : (nextCompanies[0]?.id ?? null);
++
++    setCompanyId(resolved);
++    setActiveCompanyId(resolved);
++
++    return nextUser;
+   }, []);
+ 
+-  // Initialize auth state by validating cookie
+   useEffect(() => {
+-    const initializeAuth = async () => {
++    const initialize = async () => {
++      // Sin tokens no hay nada que validar, y preguntar sólo produce un 401.
++      if (!hasSession()) {
++        setIsLoading(false);
++        return;
++      }
+       try {
+-        // Try to fetch user data - if cookies are valid, this will succeed
+-        await fetchUserData();
++        await fetchUser();
+       } catch (error) {
+-        console.error("Failed to initialize auth:", error);
+-        // Cookie is invalid or expired, user is not authenticated
++        console.error("No se pudo restaurar la sesión:", error);
++        clearSession();
+       } finally {
+         setIsLoading(false);
+       }
+     };
+ 
+-    initializeAuth();
+-  }, [fetchUserData]);
++    void initialize();
++  }, [fetchUser]);
++
++  /** El link de errores puede invalidar la sesión sin pasar por aquí. */
++  useEffect(
++    () =>
++      onSessionCleared(() => {
++        setUser(null);
++        setCompanies([]);
++        setActiveCompanyId(null);
++      }),
++    [],
++  );
+ 
+-  // Login function - cookies are set by the server
+   const login = useCallback(
+-    async (userData?: User) => {
+-      try {
+-        // If user data is provided, use it
+-        if (userData) {
+-          localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
+-          setUser(userData);
+-        } else {
+-          // Otherwise, fetch user data from API (validates cookie)
+-          await fetchUserData();
+-        }
+-      } catch (error) {
+-        console.error("Failed to validate authentication:", error);
+-        throw error;
+-      }
++    async (tokens?: TokenPair) => {
++      if (tokens) setTokens(tokens);
++      await fetchUser();
+     },
+-    [fetchUserData]
++    [fetchUser],
+   );
+ 
+   /**
+-   * Cierra sesión en este dispositivo.
+-   *
+-   * El refresh token va explícito: es lo que el servidor revoca. Si la llamada
+-   * falla —red caída, token ya vencido— la sesión local se limpia igual: dejar
+-   * al usuario "dentro" porque el servidor no contestó es la peor salida.
++   * Cierra sesión en este dispositivo. Si la llamada falla —red caída, token
++   * ya vencido— la sesión local se limpia igual: dejar al usuario "dentro"
++   * porque el servidor no contestó es la peor salida posible.
+    */
+   const logout = useCallback(async () => {
+-    localStorage.removeItem(USER_DATA_KEY);
+     try {
+       await apolloClient.mutate({
+         mutation: LOGOUT,
+         variables: { refreshToken: getRefreshToken() },
+       });
+     } catch (error) {
+-      console.error("Logout request failed; clearing local session anyway", error);
++      console.error("Falló el cierre de sesión remoto; se limpia el local:", error);
+     } finally {
+       clearSession();
+-      await apolloClient.clearStore();
+       setUser(null);
++      setCompanies([]);
++      setActiveCompanyId(null);
++      await apolloClient.clearStore();
+     }
+   }, []);
+ 
+-  /**
+-   * El link de errores puede invalidar la sesión sin pasar por aquí (un
+-   * refresh que falla). Esto es lo que hace que la UI se entere.
+-   */
+-  useEffect(() => onSessionCleared(() => setUser(null)), []);
+-
+-  // Update user function
+-  const updateUser = useCallback((userData: User) => {
++  const refetchUser = useCallback(async () => {
+     try {
+-      localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
+-      setUser(userData);
++      await fetchUser();
+     } catch (error) {
+-      console.error("Failed to update user data:", error);
++      console.error("No se pudo recargar al usuario:", error);
+     }
++  }, [fetchUser]);
++
++  /** Cambiar de negocio cambia lo que devuelve casi todo: la caché se vacía. */
++  const selectCompany = useCallback((companyId: string) => {
++    setCompanyId(companyId);
++    setActiveCompanyId(companyId);
++    void apolloClient.resetStore();
+   }, []);
+ 
+-  // Refetch user data (useful after profile updates)
+-  const refetchUser = useCallback(async () => {
+-    try {
+-      await fetchUserData();
+-    } catch (error) {
+-      console.error("Failed to refetch user data:", error);
+-    }
+-  }, [fetchUserData]);
+-
+-  const value: AuthContextValue = {
+-    user,
+-    isAuthenticated: user !== null,
+-    isLoading,
+-    login,
+-    logout,
+-    updateUser,
+-    refetchUser,
+-    company,
+-  };
++  const value = useMemo<AuthContextValue>(() => {
++    const membershipState: MembershipState =
++      companies.length === 0 ? "none" : companies.length === 1 ? "single" : "multiple";
++
++    return {
++      user,
++      companies,
++      activeCompany: companies.find((c) => c.id === activeCompanyId) ?? null,
++      membershipState,
++      isAuthenticated: user !== null,
++      isLoading,
++      login,
++      logout,
++      refetchUser,
++      selectCompany,
++    };
++  }, [user, companies, activeCompanyId, isLoading, login, logout, refetchUser, selectCompany]);
+ 
+   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+ }
+ 
+-// Custom hook to use auth context
+ export function useAuth() {
+   const context = useContext(AuthContext);
+-
+   if (context === undefined) {
+     throw new Error("useAuth must be used within an AuthProvider");
+   }
+-
+   return context;
+ }
+diff --git a/src/generated/gql.ts b/src/generated/gql.ts
+index f97f1d4..bb92f5d 100644
+--- a/src/generated/gql.ts
++++ b/src/generated/gql.ts
+@@ -14,20 +14,38 @@ import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-
+  * Learn more about it here: https://the-guild.dev/graphql/codegen/plugins/presets/preset-client#reducing-bundle-size
+  */
+ type Documents = {
++    "\n  query CompanyBySlug($slug: String!) {\n    companyBySlug(slug: $slug) {\n      id\n      slug\n      name\n      logoUrl\n    }\n  }\n": typeof types.CompanyBySlugDocument,
++    "\n  mutation JoinCompany($slug: String!) {\n    joinCompany(slug: $slug) {\n      id\n      role\n      status\n      company {\n        id\n        name\n        slug\n        logoUrl\n      }\n    }\n  }\n": typeof types.JoinCompanyDocument,
+     "\n  query MyDogs {\n    myDogs {\n      id\n      name\n      breed\n      imageUrl\n    }\n  }\n": typeof types.MyDogsDocument,
+     "\n  query Dog($id: ID!) {\n    dog(id: $id) {\n      id\n      name\n      breed\n      birthDate\n      gender\n      color\n      size\n      weightKg\n      imageUrl\n      notes\n      primaryOwner {\n        id\n        name\n        lastname\n        email\n        phone\n      }\n    }\n  }\n": typeof types.DogDocument,
++    "\n  mutation CreateDog($input: CreateDogInput!) {\n    createDog(input: $input) {\n      id\n      name\n      breed\n      imageUrl\n    }\n  }\n": typeof types.CreateDogDocument,
+     "\n  query Me {\n    me {\n      id\n      email\n      name\n      lastname\n      phone\n      gender\n      birthDate\n      emailVerifiedAt\n      status\n    }\n  }\n": typeof types.MeDocument,
+     "\n  query MyCompanies {\n    myCompanies {\n      id\n      name\n      logoUrl\n      slug\n      timezone\n      currency\n    }\n  }\n": typeof types.MyCompaniesDocument,
+     "\n  mutation SignInUser($input: SignInUserInput!) {\n    signUser(input: $input) {\n      accessToken\n      refreshToken\n    }\n  }\n": typeof types.SignInUserDocument,
+     "\n  mutation LogoutUser($refreshToken: String) {\n    logoutUser(refreshToken: $refreshToken) {\n      success\n    }\n  }\n": typeof types.LogoutUserDocument,
++    "\n  mutation CreateUser($input: CreateUserInput!) {\n    createUser(input: $input) {\n      user {\n        id\n        email\n        name\n      }\n      tokens {\n        accessToken\n        refreshToken\n      }\n    }\n  }\n": typeof types.CreateUserDocument,
++    "\n  mutation VerifyEmail($token: String!) {\n    verifyEmail(token: $token) {\n      accessToken\n      refreshToken\n    }\n  }\n": typeof types.VerifyEmailDocument,
++    "\n  mutation UpdateUser($input: UpdateUserInput!) {\n    updateUser(input: $input) {\n      id\n      name\n      lastname\n      email\n      phone\n      gender\n      birthDate\n    }\n  }\n": typeof types.UpdateUserDocument,
++    "\n  mutation RequestPasswordReset($input: RequestPasswordResetInput!) {\n    requestPasswordReset(input: $input)\n  }\n": typeof types.RequestPasswordResetDocument,
++    "\n  mutation ConfirmPasswordReset($input: ConfirmPasswordResetInput!) {\n    confirmPasswordReset(input: $input)\n  }\n": typeof types.ConfirmPasswordResetDocument,
++    "\n  mutation ChangePassword($input: ChangePasswordInput!) {\n    changePassword(input: $input)\n  }\n": typeof types.ChangePasswordDocument,
+ };
+ const documents: Documents = {
++    "\n  query CompanyBySlug($slug: String!) {\n    companyBySlug(slug: $slug) {\n      id\n      slug\n      name\n      logoUrl\n    }\n  }\n": types.CompanyBySlugDocument,
++    "\n  mutation JoinCompany($slug: String!) {\n    joinCompany(slug: $slug) {\n      id\n      role\n      status\n      company {\n        id\n        name\n        slug\n        logoUrl\n      }\n    }\n  }\n": types.JoinCompanyDocument,
+     "\n  query MyDogs {\n    myDogs {\n      id\n      name\n      breed\n      imageUrl\n    }\n  }\n": types.MyDogsDocument,
+     "\n  query Dog($id: ID!) {\n    dog(id: $id) {\n      id\n      name\n      breed\n      birthDate\n      gender\n      color\n      size\n      weightKg\n      imageUrl\n      notes\n      primaryOwner {\n        id\n        name\n        lastname\n        email\n        phone\n      }\n    }\n  }\n": types.DogDocument,
++    "\n  mutation CreateDog($input: CreateDogInput!) {\n    createDog(input: $input) {\n      id\n      name\n      breed\n      imageUrl\n    }\n  }\n": types.CreateDogDocument,
+     "\n  query Me {\n    me {\n      id\n      email\n      name\n      lastname\n      phone\n      gender\n      birthDate\n      emailVerifiedAt\n      status\n    }\n  }\n": types.MeDocument,
+     "\n  query MyCompanies {\n    myCompanies {\n      id\n      name\n      logoUrl\n      slug\n      timezone\n      currency\n    }\n  }\n": types.MyCompaniesDocument,
+     "\n  mutation SignInUser($input: SignInUserInput!) {\n    signUser(input: $input) {\n      accessToken\n      refreshToken\n    }\n  }\n": types.SignInUserDocument,
+     "\n  mutation LogoutUser($refreshToken: String) {\n    logoutUser(refreshToken: $refreshToken) {\n      success\n    }\n  }\n": types.LogoutUserDocument,
++    "\n  mutation CreateUser($input: CreateUserInput!) {\n    createUser(input: $input) {\n      user {\n        id\n        email\n        name\n      }\n      tokens {\n        accessToken\n        refreshToken\n      }\n    }\n  }\n": types.CreateUserDocument,
++    "\n  mutation VerifyEmail($token: String!) {\n    verifyEmail(token: $token) {\n      accessToken\n      refreshToken\n    }\n  }\n": types.VerifyEmailDocument,
++    "\n  mutation UpdateUser($input: UpdateUserInput!) {\n    updateUser(input: $input) {\n      id\n      name\n      lastname\n      email\n      phone\n      gender\n      birthDate\n    }\n  }\n": types.UpdateUserDocument,
++    "\n  mutation RequestPasswordReset($input: RequestPasswordResetInput!) {\n    requestPasswordReset(input: $input)\n  }\n": types.RequestPasswordResetDocument,
++    "\n  mutation ConfirmPasswordReset($input: ConfirmPasswordResetInput!) {\n    confirmPasswordReset(input: $input)\n  }\n": types.ConfirmPasswordResetDocument,
++    "\n  mutation ChangePassword($input: ChangePasswordInput!) {\n    changePassword(input: $input)\n  }\n": types.ChangePasswordDocument,
+ };
+ 
+ /**
+@@ -44,6 +62,14 @@ const documents: Documents = {
+  */
+ export function graphql(source: string): unknown;
+ 
++/**
++ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
++ */
++export function graphql(source: "\n  query CompanyBySlug($slug: String!) {\n    companyBySlug(slug: $slug) {\n      id\n      slug\n      name\n      logoUrl\n    }\n  }\n"): (typeof documents)["\n  query CompanyBySlug($slug: String!) {\n    companyBySlug(slug: $slug) {\n      id\n      slug\n      name\n      logoUrl\n    }\n  }\n"];
++/**
++ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
++ */
++export function graphql(source: "\n  mutation JoinCompany($slug: String!) {\n    joinCompany(slug: $slug) {\n      id\n      role\n      status\n      company {\n        id\n        name\n        slug\n        logoUrl\n      }\n    }\n  }\n"): (typeof documents)["\n  mutation JoinCompany($slug: String!) {\n    joinCompany(slug: $slug) {\n      id\n      role\n      status\n      company {\n        id\n        name\n        slug\n        logoUrl\n      }\n    }\n  }\n"];
+ /**
+  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+  */
+@@ -52,6 +78,10 @@ export function graphql(source: "\n  query MyDogs {\n    myDogs {\n      id\n
+  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+  */
+ export function graphql(source: "\n  query Dog($id: ID!) {\n    dog(id: $id) {\n      id\n      name\n      breed\n      birthDate\n      gender\n      color\n      size\n      weightKg\n      imageUrl\n      notes\n      primaryOwner {\n        id\n        name\n        lastname\n        email\n        phone\n      }\n    }\n  }\n"): (typeof documents)["\n  query Dog($id: ID!) {\n    dog(id: $id) {\n      id\n      name\n      breed\n      birthDate\n      gender\n      color\n      size\n      weightKg\n      imageUrl\n      notes\n      primaryOwner {\n        id\n        name\n        lastname\n        email\n        phone\n      }\n    }\n  }\n"];
++/**
++ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
++ */
++export function graphql(source: "\n  mutation CreateDog($input: CreateDogInput!) {\n    createDog(input: $input) {\n      id\n      name\n      breed\n      imageUrl\n    }\n  }\n"): (typeof documents)["\n  mutation CreateDog($input: CreateDogInput!) {\n    createDog(input: $input) {\n      id\n      name\n      breed\n      imageUrl\n    }\n  }\n"];
+ /**
+  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+  */
+@@ -68,6 +98,30 @@ export function graphql(source: "\n  mutation SignInUser($input: SignInUserInput
+  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+  */
+ export function graphql(source: "\n  mutation LogoutUser($refreshToken: String) {\n    logoutUser(refreshToken: $refreshToken) {\n      success\n    }\n  }\n"): (typeof documents)["\n  mutation LogoutUser($refreshToken: String) {\n    logoutUser(refreshToken: $refreshToken) {\n      success\n    }\n  }\n"];
++/**
++ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
++ */
++export function graphql(source: "\n  mutation CreateUser($input: CreateUserInput!) {\n    createUser(input: $input) {\n      user {\n        id\n        email\n        name\n      }\n      tokens {\n        accessToken\n        refreshToken\n      }\n    }\n  }\n"): (typeof documents)["\n  mutation CreateUser($input: CreateUserInput!) {\n    createUser(input: $input) {\n      user {\n        id\n        email\n        name\n      }\n      tokens {\n        accessToken\n        refreshToken\n      }\n    }\n  }\n"];
++/**
++ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
++ */
++export function graphql(source: "\n  mutation VerifyEmail($token: String!) {\n    verifyEmail(token: $token) {\n      accessToken\n      refreshToken\n    }\n  }\n"): (typeof documents)["\n  mutation VerifyEmail($token: String!) {\n    verifyEmail(token: $token) {\n      accessToken\n      refreshToken\n    }\n  }\n"];
++/**
++ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
++ */
++export function graphql(source: "\n  mutation UpdateUser($input: UpdateUserInput!) {\n    updateUser(input: $input) {\n      id\n      name\n      lastname\n      email\n      phone\n      gender\n      birthDate\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateUser($input: UpdateUserInput!) {\n    updateUser(input: $input) {\n      id\n      name\n      lastname\n      email\n      phone\n      gender\n      birthDate\n    }\n  }\n"];
++/**
++ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
++ */
++export function graphql(source: "\n  mutation RequestPasswordReset($input: RequestPasswordResetInput!) {\n    requestPasswordReset(input: $input)\n  }\n"): (typeof documents)["\n  mutation RequestPasswordReset($input: RequestPasswordResetInput!) {\n    requestPasswordReset(input: $input)\n  }\n"];
++/**
++ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
++ */
++export function graphql(source: "\n  mutation ConfirmPasswordReset($input: ConfirmPasswordResetInput!) {\n    confirmPasswordReset(input: $input)\n  }\n"): (typeof documents)["\n  mutation ConfirmPasswordReset($input: ConfirmPasswordResetInput!) {\n    confirmPasswordReset(input: $input)\n  }\n"];
++/**
++ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
++ */
++export function graphql(source: "\n  mutation ChangePassword($input: ChangePasswordInput!) {\n    changePassword(input: $input)\n  }\n"): (typeof documents)["\n  mutation ChangePassword($input: ChangePasswordInput!) {\n    changePassword(input: $input)\n  }\n"];
+ 
+ export function graphql(source: string) {
+   return (documents as any)[source] ?? {};
+diff --git a/src/generated/graphql.ts b/src/generated/graphql.ts
+index 02e9ebc..e4ff53f 100644
+--- a/src/generated/graphql.ts
++++ b/src/generated/graphql.ts
+@@ -4,6 +4,76 @@ type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
+ /** Internal type. DO NOT USE DIRECTLY. */
+ export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never };
+ import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/core';
++/** A qué aplicación vuelve el usuario desde un correo. */
++export type AppAudience =
++  /** App del negocio. */
++  | 'BUSINESS'
++  /** App de clientes finales. */
++  | 'CLIENT';
++
++export type ChangePasswordInput = {
++  currentPassword: string;
++  newPassword: string;
++};
++
++export type ConfirmPasswordResetInput = {
++  newPassword: string;
++  token: string;
++};
++
++export type ContactType =
++  | 'AUTHORIZED_PICKUP'
++  | 'EMERGENCY'
++  | 'VETERINARIAN';
++
++export type CreateDogInput = {
++  birthDate?: string | null | undefined;
++  breed?: string | null | undefined;
++  color?: string | null | undefined;
++  contacts?: Array<DogContactInput> | null | undefined;
++  gender?: Gender | null | undefined;
++  name: string;
++  notes?: string | null | undefined;
++  /**
++   * Owner of the dog. Staff omit it to register a dog for the client they are
++   * serving; a client creating their own dog always becomes the owner regardless
++   * of what is sent.
++   */
++  ownerUserId?: string | number | null | undefined;
++  size: DogSize;
++  /** Decimal string, e.g. "18.40". */
++  weightKg?: string | null | undefined;
++};
++
++export type CreateUserInput = {
++  /** Which app the signup came from. Decides where the verification email points. */
++  app?: AppAudience | null | undefined;
++  birthDate?: string | null | undefined;
++  /**
++   * Links the account as a CLIENT of the business with that slug, in the same
++   * transaction that creates the user. Omitting it creates an account with no
++   * company — which is how a business owner signs up before `createCompany`.
++   *
++   * It can only ever produce a CLIENT membership. No public input decides a role.
++   */
++  companySlug?: string | null | undefined;
++  email: string;
++  gender?: Gender | null | undefined;
++  lastname?: string | null | undefined;
++  name?: string | null | undefined;
++  password: string;
++  phone?: string | null | undefined;
++};
++
++export type DogContactInput = {
++  email?: string | null | undefined;
++  name: string;
++  notes?: string | null | undefined;
++  phone: string;
++  relation?: string | null | undefined;
++  type: ContactType;
++};
++
+ export type DogSize =
+   | 'GIGANTIC'
+   | 'LARGE'
+@@ -17,11 +87,49 @@ export type Gender =
+   | 'MALE'
+   | 'OTHER';
+ 
++/**
++ * Roles a user may hold within one company. Mirrors the Prisma enum.
++ * A user holds these per company, not globally.
++ */
++export type MembershipRole =
++  | 'ADMIN'
++  | 'CLIENT'
++  | 'OWNER'
++  | 'STAFF';
++
++export type MembershipStatus =
++  | 'ACTIVE'
++  | 'REVOKED'
++  | 'SUSPENDED';
++
++export type RequestPasswordResetInput = {
++  /** Defaults to BUSINESS, which is the previous behaviour. */
++  app?: AppAudience | null | undefined;
++  email: string;
++};
++
+ export type SignInUserInput = {
+   email: string;
+   password: string;
+ };
+ 
++/**
++ * Self-service profile edits only.
++ *
++ * `companyId` and `clientOfId` used to be accepted here, which let any user
++ * attach themselves to any company — privilege escalation in one mutation.
++ * Membership changes now go through inviteMember / revokeMembership, which are
++ * role-gated. `password` is not here either: changing it requires the current
++ * password, so it has its own mutation.
++ */
++export type UpdateUserInput = {
++  birthDate?: string | null | undefined;
++  gender?: Gender | null | undefined;
++  lastname?: string | null | undefined;
++  name?: string | null | undefined;
++  phone?: string | null | undefined;
++};
++
+ /** Lifecycle of a user account, independent of any company membership. */
+ export type UserStatus =
+   | 'ACTIVE'
+@@ -31,6 +139,20 @@ export type UserStatus =
+   /** Registered but email not yet verified. */
+   | 'INCOMPLETE';
+ 
++export type CompanyBySlugQueryVariables = Exact<{
++  slug: string;
++}>;
++
++
++export type CompanyBySlugQuery = { companyBySlug: { id: string, slug: string, name: string, logoUrl: string | null } | null };
++
++export type JoinCompanyMutationVariables = Exact<{
++  slug: string;
++}>;
++
++
++export type JoinCompanyMutation = { joinCompany: { id: string, role: MembershipRole, status: MembershipStatus, company: { id: string, name: string, slug: string | null, logoUrl: string | null } } };
++
+ export type MyDogsQueryVariables = Exact<{ [key: string]: never; }>;
+ 
+ 
+@@ -43,6 +165,13 @@ export type DogQueryVariables = Exact<{
+ 
+ export type DogQuery = { dog: { id: string, name: string, breed: string | null, birthDate: string | null, gender: Gender | null, color: string | null, size: DogSize, weightKg: string | null, imageUrl: string | null, notes: string | null, primaryOwner: { id: string, name: string | null, lastname: string | null, email: string, phone: string | null } | null } | null };
+ 
++export type CreateDogMutationVariables = Exact<{
++  input: CreateDogInput;
++}>;
++
++
++export type CreateDogMutation = { createDog: { id: string, name: string, breed: string | null, imageUrl: string | null } };
++
+ export type MeQueryVariables = Exact<{ [key: string]: never; }>;
+ 
+ 
+@@ -67,10 +196,61 @@ export type LogoutUserMutationVariables = Exact<{
+ 
+ export type LogoutUserMutation = { logoutUser: { success: boolean } };
+ 
++export type CreateUserMutationVariables = Exact<{
++  input: CreateUserInput;
++}>;
++
++
++export type CreateUserMutation = { createUser: { user: { id: string, email: string, name: string | null }, tokens: { accessToken: string, refreshToken: string } } };
++
++export type VerifyEmailMutationVariables = Exact<{
++  token: string;
++}>;
++
++
++export type VerifyEmailMutation = { verifyEmail: { accessToken: string, refreshToken: string } };
++
++export type UpdateUserMutationVariables = Exact<{
++  input: UpdateUserInput;
++}>;
++
++
++export type UpdateUserMutation = { updateUser: { id: string, name: string | null, lastname: string | null, email: string, phone: string | null, gender: Gender | null, birthDate: string | null } };
++
++export type RequestPasswordResetMutationVariables = Exact<{
++  input: RequestPasswordResetInput;
++}>;
++
++
++export type RequestPasswordResetMutation = { requestPasswordReset: boolean };
++
++export type ConfirmPasswordResetMutationVariables = Exact<{
++  input: ConfirmPasswordResetInput;
++}>;
++
++
++export type ConfirmPasswordResetMutation = { confirmPasswordReset: boolean };
++
++export type ChangePasswordMutationVariables = Exact<{
++  input: ChangePasswordInput;
++}>;
++
++
++export type ChangePasswordMutation = { changePassword: boolean };
++
+ 
++export const CompanyBySlugDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"CompanyBySlug"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"slug"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"companyBySlug"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"slug"},"value":{"kind":"Variable","name":{"kind":"Name","value":"slug"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"slug"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"logoUrl"}}]}}]}}]} as unknown as DocumentNode<CompanyBySlugQuery, CompanyBySlugQueryVariables>;
++export const JoinCompanyDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"JoinCompany"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"slug"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"joinCompany"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"slug"},"value":{"kind":"Variable","name":{"kind":"Name","value":"slug"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"role"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"company"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"slug"}},{"kind":"Field","name":{"kind":"Name","value":"logoUrl"}}]}}]}}]}}]} as unknown as DocumentNode<JoinCompanyMutation, JoinCompanyMutationVariables>;
+ export const MyDogsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"MyDogs"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"myDogs"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"breed"}},{"kind":"Field","name":{"kind":"Name","value":"imageUrl"}}]}}]}}]} as unknown as DocumentNode<MyDogsQuery, MyDogsQueryVariables>;
+ export const DogDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Dog"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"dog"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"breed"}},{"kind":"Field","name":{"kind":"Name","value":"birthDate"}},{"kind":"Field","name":{"kind":"Name","value":"gender"}},{"kind":"Field","name":{"kind":"Name","value":"color"}},{"kind":"Field","name":{"kind":"Name","value":"size"}},{"kind":"Field","name":{"kind":"Name","value":"weightKg"}},{"kind":"Field","name":{"kind":"Name","value":"imageUrl"}},{"kind":"Field","name":{"kind":"Name","value":"notes"}},{"kind":"Field","name":{"kind":"Name","value":"primaryOwner"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"lastname"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"phone"}}]}}]}}]}}]} as unknown as DocumentNode<DogQuery, DogQueryVariables>;
++export const CreateDogDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateDog"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateDogInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createDog"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"breed"}},{"kind":"Field","name":{"kind":"Name","value":"imageUrl"}}]}}]}}]} as unknown as DocumentNode<CreateDogMutation, CreateDogMutationVariables>;
+ export const MeDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Me"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"me"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"lastname"}},{"kind":"Field","name":{"kind":"Name","value":"phone"}},{"kind":"Field","name":{"kind":"Name","value":"gender"}},{"kind":"Field","name":{"kind":"Name","value":"birthDate"}},{"kind":"Field","name":{"kind":"Name","value":"emailVerifiedAt"}},{"kind":"Field","name":{"kind":"Name","value":"status"}}]}}]}}]} as unknown as DocumentNode<MeQuery, MeQueryVariables>;
+ export const MyCompaniesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"MyCompanies"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"myCompanies"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"logoUrl"}},{"kind":"Field","name":{"kind":"Name","value":"slug"}},{"kind":"Field","name":{"kind":"Name","value":"timezone"}},{"kind":"Field","name":{"kind":"Name","value":"currency"}}]}}]}}]} as unknown as DocumentNode<MyCompaniesQuery, MyCompaniesQueryVariables>;
+ export const SignInUserDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SignInUser"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"SignInUserInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"signUser"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"accessToken"}},{"kind":"Field","name":{"kind":"Name","value":"refreshToken"}}]}}]}}]} as unknown as DocumentNode<SignInUserMutation, SignInUserMutationVariables>;
+-export const LogoutUserDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"LogoutUser"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"refreshToken"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"logoutUser"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"refreshToken"},"value":{"kind":"Variable","name":{"kind":"Name","value":"refreshToken"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"success"}}]}}]}}]} as unknown as DocumentNode<LogoutUserMutation, LogoutUserMutationVariables>;
+\ No newline at end of file
++export const LogoutUserDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"LogoutUser"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"refreshToken"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"logoutUser"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"refreshToken"},"value":{"kind":"Variable","name":{"kind":"Name","value":"refreshToken"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"success"}}]}}]}}]} as unknown as DocumentNode<LogoutUserMutation, LogoutUserMutationVariables>;
++export const CreateUserDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateUser"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateUserInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createUser"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"user"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"tokens"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"accessToken"}},{"kind":"Field","name":{"kind":"Name","value":"refreshToken"}}]}}]}}]}}]} as unknown as DocumentNode<CreateUserMutation, CreateUserMutationVariables>;
++export const VerifyEmailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"VerifyEmail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"token"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"verifyEmail"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"token"},"value":{"kind":"Variable","name":{"kind":"Name","value":"token"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"accessToken"}},{"kind":"Field","name":{"kind":"Name","value":"refreshToken"}}]}}]}}]} as unknown as DocumentNode<VerifyEmailMutation, VerifyEmailMutationVariables>;
++export const UpdateUserDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateUser"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateUserInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateUser"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"lastname"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"phone"}},{"kind":"Field","name":{"kind":"Name","value":"gender"}},{"kind":"Field","name":{"kind":"Name","value":"birthDate"}}]}}]}}]} as unknown as DocumentNode<UpdateUserMutation, UpdateUserMutationVariables>;
++export const RequestPasswordResetDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RequestPasswordReset"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"RequestPasswordResetInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"requestPasswordReset"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}]}]}}]} as unknown as DocumentNode<RequestPasswordResetMutation, RequestPasswordResetMutationVariables>;
++export const ConfirmPasswordResetDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ConfirmPasswordReset"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ConfirmPasswordResetInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"confirmPasswordReset"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}]}]}}]} as unknown as DocumentNode<ConfirmPasswordResetMutation, ConfirmPasswordResetMutationVariables>;
++export const ChangePasswordDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ChangePassword"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ChangePasswordInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"changePassword"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}]}]}}]} as unknown as DocumentNode<ChangePasswordMutation, ChangePasswordMutationVariables>;
+\ No newline at end of file
+diff --git a/src/graphql/company.ts b/src/graphql/company.ts
+new file mode 100644
+index 0000000..398a1ce
+--- /dev/null
++++ b/src/graphql/company.ts
+@@ -0,0 +1,42 @@
++import { graphql } from "@/generated";
++
++/**
++ * Cara pública del negocio, para la pantalla de registro.
++ *
++ * Es `@public` a propósito: cuando alguien abre el link de registro todavía no
++ * hay sesión, y aun así tiene que poder confirmar que se está registrando en
++ * el lugar correcto. Devuelve null si el slug no existe o el negocio no está
++ * activo — la pantalla trata ambos casos igual.
++ */
++export const COMPANY_BY_SLUG = graphql(`
++  query CompanyBySlug($slug: String!) {
++    companyBySlug(slug: $slug) {
++      id
++      slug
++      name
++      logoUrl
++    }
++  }
++`);
++
++/**
++ * Vincula al usuario autenticado como cliente de un negocio.
++ *
++ * Es idempotente en el servidor: repetirla devuelve la membresía existente en
++ * vez de fallar, así que reintentar tras un error de red es seguro.
++ */
++export const JOIN_COMPANY = graphql(`
++  mutation JoinCompany($slug: String!) {
++    joinCompany(slug: $slug) {
++      id
++      role
++      status
++      company {
++        id
++        name
++        slug
++        logoUrl
++      }
++    }
++  }
++`);
+diff --git a/src/graphql/dogs.ts b/src/graphql/dogs.ts
+index 8577002..ac3fbb3 100644
+--- a/src/graphql/dogs.ts
++++ b/src/graphql/dogs.ts
+@@ -40,3 +40,21 @@ export const DOG = graphql(`
+     }
+   }
+ `);
++
++/**
++ * Un perro por llamada: `createDogs` en bulk ya no existe.
++ *
++ * `ownerUserId` se omite a propósito — un cliente que crea un perro siempre
++ * queda como dueño, sin importar lo que mande. `weightKg` es un decimal en
++ * string, como todo lo que en la base es Decimal.
++ */
++export const CREATE_DOG = graphql(`
++  mutation CreateDog($input: CreateDogInput!) {
++    createDog(input: $input) {
++      id
++      name
++      breed
++      imageUrl
++    }
++  }
++`);
+diff --git a/src/graphql/user.ts b/src/graphql/user.ts
+index 05bd589..c45f2f3 100644
+--- a/src/graphql/user.ts
++++ b/src/graphql/user.ts
+@@ -63,3 +63,71 @@ export const LOGOUT = graphql(`
+     }
+   }
+ `);
++
++/**
++ * Alta pública.
++ *
++ * `companySlug` es lo que convierte la cuenta en cliente de un negocio: sin
++ * él el usuario queda sin membresía y toda operación con datos de negocio
++ * responde TENANT_CONTEXT_REQUIRED. `app: CLIENT` decide a dónde apunta el
++ * link del correo de verificación, que con dos frontends no puede ser fijo.
++ */
++export const CREATE_USER = graphql(`
++  mutation CreateUser($input: CreateUserInput!) {
++    createUser(input: $input) {
++      user {
++        id
++        email
++        name
++      }
++      tokens {
++        accessToken
++        refreshToken
++      }
++    }
++  }
++`);
++
++export const VERIFY_EMAIL = graphql(`
++  mutation VerifyEmail($token: String!) {
++    verifyEmail(token: $token) {
++      accessToken
++      refreshToken
++    }
++  }
++`);
++
++/** Sin email ni contraseña: el primero no se edita y la segunda tiene su propia mutación. */
++export const UPDATE_USER = graphql(`
++  mutation UpdateUser($input: UpdateUserInput!) {
++    updateUser(input: $input) {
++      id
++      name
++      lastname
++      email
++      phone
++      gender
++      birthDate
++    }
++  }
++`);
++
++/** Devuelve true exista o no la cuenta: lo contrario delataría qué correos hay registrados. */
++export const REQUEST_PASSWORD_RESET = graphql(`
++  mutation RequestPasswordReset($input: RequestPasswordResetInput!) {
++    requestPasswordReset(input: $input)
++  }
++`);
++
++export const CONFIRM_PASSWORD_RESET = graphql(`
++  mutation ConfirmPasswordReset($input: ConfirmPasswordResetInput!) {
++    confirmPasswordReset(input: $input)
++  }
++`);
++
++/** Cambiar una contraseña conocida exige demostrar que se conoce. */
++export const CHANGE_PASSWORD = graphql(`
++  mutation ChangePassword($input: ChangePasswordInput!) {
++    changePassword(input: $input)
++  }
++`);
+diff --git a/src/layouts/DashboardLayout.tsx b/src/layouts/DashboardLayout.tsx
+index 1aec400..2899d93 100644
+--- a/src/layouts/DashboardLayout.tsx
++++ b/src/layouts/DashboardLayout.tsx
+@@ -1,12 +1,14 @@
+ import { Outlet } from "react-router-dom";
+ import { cn } from "@/lib/utils";
+ import BottomNav from "@/components/BottomNav";
++import VerifyEmailBanner from "@/components/VerifyEmailBanner";
+ 
+ export default function DashboardLayout() {
+   return (
+     <div className="h-dvh w-full bg-background dark:bg-background-dark">
+       <main className={cn("h-full transition-all duration-300 ease-in-out mx-auto w-[calc(100%-2rem)] max-w-md")}>
+         <div className="h-full flex flex-col pb-24">
++          <VerifyEmailBanner />
+           <Outlet />
+         </div>
+       </main>
+diff --git a/src/lib/api/dogs.api.ts b/src/lib/api/dogs.api.ts
+index 92226b4..da0690a 100644
+--- a/src/lib/api/dogs.api.ts
++++ b/src/lib/api/dogs.api.ts
+@@ -31,47 +31,6 @@ export const DOG_BY_ID = gql`
+   }
+ `;
+ 
+-export const CREATE_USER_DOGS = gql`
+-  mutation Mutation($input: CreateDogsInput!) {
+-    createDogs(input: $input) {
+-      breed
+-      color
+-      id
+-      gender
+-      name
+-      size
+-      weight
+-      birthDate
+-      imageUrl
+-    }
+-  }
+-`;
+-
+-export const UPDATE_DOG = gql`
+-  mutation UpdateDog($input: UpdateDogInput!) {
+-    updateDog(input: $input) {
+-      id
+-      name
+-      breed
+-      birthDate
+-      gender
+-      color
+-      weight
+-      size
+-      imageUrl
+-      owner {
+-        id
+-        email
+-        name
+-        lastname
+-        phone
+-        profilePicture
+-        status
+-      }
+-    }
+-  }
+-`;
+-
+ export const GET_USER_DOGS = gql`
+   query UserDogs {
+     userDogs {
+diff --git a/src/lib/api/user.api.ts b/src/lib/api/user.api.ts
+deleted file mode 100644
+index 9839ade..0000000
+--- a/src/lib/api/user.api.ts
++++ /dev/null
+@@ -1,89 +0,0 @@
+-// ⚠️ Documentos del backend ANTERIOR: firmas y campos ya no existen en el
+-// schema actual. Se migran a `src/graphql/` con el helper `graphql()` en
+-// F3–F6 — ver el plan, §6.1 (mapa de operaciones).
+-import { gql } from "@apollo/client";
+-
+-export const LOGIN_MUTATION = gql`
+-  mutation SignInUser($input: SignInUserInput) {
+-    signUser(input: $input) {
+-      accessToken
+-      refreshToken
+-    }
+-  }
+-`;
+-
+-export const USER_QUERY = gql`
+-  query User {
+-    user {
+-      id
+-      email
+-      name
+-      company {
+-        id
+-        name
+-        uuid
+-        logoUrl
+-        ownerId
+-      }
+-    }
+-  }
+-`;
+-
+-export const LOGOUT_MUTATION = gql`
+-  mutation LogoutUser {
+-    logoutUser {
+-      success
+-    }
+-  }
+-`;
+-
+-export const CREATE_USER_CLIENT = gql`
+-  mutation Mutation($input: CreateUserInput) {
+-    createUser(input: $input) {
+-      user {
+-        id
+-      }
+-      tokens {
+-        accessToken
+-        refreshToken
+-      }
+-    }
+-  }
+-`;
+-
+-export const VERIFY_EMAIL_MUTATION = gql`
+-  mutation VerifyEmail($token: String!) {
+-    verifyEmail(token: $token) {
+-      accessToken
+-      refreshToken
+-    }
+-  }
+-`;
+-
+-export const USER_PROFILE_QUERY = gql`
+-  query UserProfile {
+-    user {
+-      id
+-      name
+-      lastname
+-      email
+-      phone
+-      gender
+-      birthDate
+-    }
+-  }
+-`;
+-
+-export const UPDATE_USER_MUTATION = gql`
+-  mutation UpdateUser($input: UpdateUserInput!) {
+-    updateUser(input: $input) {
+-      id
+-      name
+-      lastname
+-      email
+-      phone
+-      gender
+-      birthDate
+-    }
+-  }
+-`;
+diff --git a/src/lib/password.ts b/src/lib/password.ts
+new file mode 100644
+index 0000000..94dadcf
+--- /dev/null
++++ b/src/lib/password.ts
+@@ -0,0 +1,25 @@
++/**
++ * Política de contraseñas, la misma que aplica el servidor.
++ *
++ * `assertPasswordPolicy` en el backend exige 10 caracteres con letras y
++ * números, y la rechaza en las tres rutas que fijan contraseña: alta, reset y
++ * cambio. El formulario pedía 8 y sin exigir dígitos, así que una contraseña
++ * "válida" en la UI moría con VALIDATION_ERROR al enviarla. Duplicar la regla
++ * aquí es deliberado: sirve para avisar antes, no para autorizar — quien
++ * decide sigue siendo el servidor.
++ */
++
++export const PASSWORD_MIN_LENGTH = 10;
++
++export const PASSWORD_HINT = "Mínimo 10 caracteres, con letras y números.";
++
++/** Devuelve el motivo del rechazo, o null si pasa. */
++export function validatePassword(password: string): string | null {
++  if (password.length < PASSWORD_MIN_LENGTH) {
++    return `La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.`;
++  }
++  if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
++    return "La contraseña debe combinar letras y números.";
++  }
++  return null;
++}
+diff --git a/src/pages/authentication/ClientSignup.tsx b/src/pages/authentication/ClientSignup.tsx
+index af51d06..b5b285d 100644
+--- a/src/pages/authentication/ClientSignup.tsx
++++ b/src/pages/authentication/ClientSignup.tsx
+@@ -1,6 +1,7 @@
+ import { useState } from "react";
+-import { Link } from "react-router-dom";
+-import { ArrowLeft } from "lucide-react";
++import { Link, useSearchParams } from "react-router-dom";
++import { ArrowLeft, Building2 } from "lucide-react";
++import { useMutation, useQuery } from "@apollo/client/react";
+ import ClientSignupStep1Form, {
+   type ClientSignupStep1Values,
+ } from "@/components/Form/Forms/ClientSignupStep1Form";
+@@ -9,11 +10,13 @@ import ClientSignupStep2Form, {
+ } from "@/components/Form/Forms/ClientSignupStep2Form";
+ import ClientSignupStep3Form from "@/components/Form/Forms/ClientSignupStep3Form";
+ import SignupSuccessScreen from "@/components/Form/Forms/SignupSuccessScreen";
+-import { useMutation } from "@apollo/client/react";
+-import { CREATE_USER_CLIENT } from "@/lib/api/user.api";
+-import { CREATE_USER_DOGS } from "@/lib/api/dogs.api";
++import { CREATE_USER } from "@/graphql/user";
++import { CREATE_DOG } from "@/graphql/dogs";
++import { COMPANY_BY_SLUG } from "@/graphql/company";
++import { setTokens } from "@/lib/session";
++import { messageFor } from "@/lib/api/errors";
++import { toCreateDogInput } from "@/utils/translators";
+ import successImage from "@/assets/success.png";
+-import { translateDogFormToBody } from "@/utils/translators";
+ 
+ const TOTAL_STEPS = 3;
+ 
+@@ -23,18 +26,12 @@ interface StepContent {
+ }
+ 
+ const stepContent: Record<number, StepContent> = {
+-  1: {
+-    title: "Queremos conocerte",
+-    subtitle: "Primero, cuéntanos sobre ti.",
+-  },
++  1: { title: "Queremos conocerte", subtitle: "Primero, cuéntanos sobre ti." },
+   2: {
+     title: "Cuéntanos sobre tu perro",
+     subtitle: "Agrega a tus amigos peludos para completar tu perfil.",
+   },
+-  3: {
+-    title: "¿Es correcto?",
+-    subtitle: "Por favor revisa tu información.",
+-  },
++  3: { title: "¿Es correcto?", subtitle: "Por favor revisa tu información." },
+ };
+ 
+ interface SignupFormData {
+@@ -42,50 +39,37 @@ interface SignupFormData {
+   dogs?: DogFormValues[];
+ }
+ 
++/**
++ * Alta de cliente.
++ *
++ * El negocio viaja en la URL: `/registro-cliente?empresa=<slug>`. Ese slug es
++ * lo que convierte la cuenta en cliente de alguien — sin él el usuario queda
++ * sin membresía y no puede ni registrar un perro, porque `createDog` exige
++ * empresa activa. Cuando falta, el alta sigue siendo válida y la vinculación
++ * se resuelve después en /vincular-negocio.
++ */
+ const ClientSignup = () => {
++  const [searchParams] = useSearchParams();
++  const companySlug = searchParams.get("empresa")?.trim().toLowerCase() ?? null;
++
+   const [currentStep, setCurrentStep] = useState(1);
+   const [formData, setFormData] = useState<SignupFormData>({});
+   const [isSubmitting, setIsSubmitting] = useState(false);
+   const [isSuccess, setIsSuccess] = useState(false);
+   const [editingDogId, setEditingDogId] = useState<string | null>(null);
+-  const [createUserDogs] = useMutation(CREATE_USER_DOGS, {
+-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+-    onCompleted(data: any) {
+-      console.log("Dogs created:", data);
+-      setIsSubmitting(false);
+-      setIsSuccess(true);
+-    },
+-    onError(error) {
+-      console.error("Error creating dogs:", error);
+-      setIsSubmitting(false);
+-    },
+-  });
+-  const [createUserClient] = useMutation(CREATE_USER_CLIENT, {
+-    onCompleted: (createdUser: unknown) => {
+-      console.log("User created:", createdUser);
+-      console.log("Form data:", formData);
+-      createUserDogs({
+-        variables: {
+-          input: {
+-            dogs: formData.dogs?.map((dog) => {
+-              console.log("Dog:", dog);
+-              return translateDogFormToBody(
+-                dog,
+-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+-                parseInt((createdUser as any)?.createUser?.user?.id),
+-              );
+-            }),
+-          },
+-        },
+-      });
+-    },
++  const [submitError, setSubmitError] = useState<string | null>(null);
++
++  const { data: companyData } = useQuery(COMPANY_BY_SLUG, {
++    variables: { slug: companySlug ?? "" },
++    skip: !companySlug,
+   });
++  const company = companyData?.companyBySlug ?? null;
++
++  const [createUser] = useMutation(CREATE_USER);
++  const [createDog] = useMutation(CREATE_DOG);
+ 
+   const scrollToTop = () => {
+-    const mainContent = document.getElementById("main-content");
+-    if (mainContent) {
+-      mainContent.scrollTo({ top: 0, behavior: "smooth" });
+-    }
++    document.getElementById("main-content")?.scrollTo({ top: 0, behavior: "smooth" });
+   };
+ 
+   const handleStep1Submit = (data: ClientSignupStep1Values) => {
+@@ -101,57 +85,88 @@ const ClientSignup = () => {
+     scrollToTop();
+   };
+ 
++  /**
++   * Cuenta primero, perros después.
++   *
++   * `createDogs` en bulk ya no existe, así que van uno por uno — y como
++   * `createDog` requiere sesión, los tokens que devuelve `createUser` se
++   * guardan ANTES del primer perro.
++   *
++   * Si un perro falla a mitad, los anteriores ya existen: crear la cuenta de
++   * nuevo daría "ese correo ya está registrado" y dejaría al usuario atorado.
++   * Por eso se avisa cuál falló y se lleva a la app, donde puede agregarlo sin
++   * repetir nada.
++   */
+   const handleConfirm = async () => {
++    const { step1, dogs = [] } = formData;
++    if (!step1) return;
++
+     setIsSubmitting(true);
++    setSubmitError(null);
++
+     try {
+-      const { step1: userData } = formData;
+-      const userBody = {
+-        ...userData,
+-        birthDate: userData?.birthdate?.toISOString(),
+-      };
+-      delete userBody.birthdate;
+-      createUserClient({ variables: { input: userBody } });
+-      setIsSubmitting(true);
++      const created = await createUser({
++        variables: {
++          input: {
++            email: step1.email,
++            password: step1.password ?? "",
++            name: step1.name,
++            lastname: step1.lastname,
++            phone: step1.phone,
++            gender: step1.gender || null,
++            birthDate: step1.birthdate?.toISOString() ?? null,
++            ...(companySlug ? { companySlug } : {}),
++            app: "CLIENT" as const,
++          },
++        },
++      });
++
++      const tokens = created.data?.createUser.tokens;
++      if (!tokens) throw new Error("La cuenta se creó pero no recibimos sesión.");
++      setTokens(tokens);
++
++      // Sin negocio no hay dónde registrar un perro: se hará tras vincularse.
++      if (companySlug) {
++        const failed: string[] = [];
++        for (const dog of dogs) {
++          try {
++            await createDog({ variables: { input: toCreateDogInput(dog) } });
++          } catch {
++            failed.push(dog.name);
++          }
++        }
++
++        if (failed.length > 0) {
++          setSubmitError(
++            `Tu cuenta quedó lista, pero no pudimos guardar a ${failed.join(", ")}. ` +
++              `Puedes agregarlo desde la app.`,
++          );
++        }
++      }
++
++      setIsSuccess(true);
+     } catch (error) {
+-      console.error("Error creating account:", error);
+-      setIsSubmitting(false);
++      setSubmitError(messageFor(error as Parameters<typeof messageFor>[0]));
+     } finally {
++      setIsSubmitting(false);
+       scrollToTop();
+     }
+   };
+ 
+-  const handleEditUserInfo = () => {
+-    setCurrentStep(1);
+-    scrollToTop();
+-  };
+-
+-  const handleEditDog = (dogId: string) => {
+-    setEditingDogId(dogId);
+-    setCurrentStep(2);
+-    scrollToTop();
+-  };
+-
+   const handleBack = () => {
+-    if (currentStep > 1) {
+-      setCurrentStep(currentStep - 1);
+-    }
++    if (currentStep > 1) setCurrentStep(currentStep - 1);
+     scrollToTop();
+   };
+ 
+   const currentContent = stepContent[currentStep];
+ 
+-  // Show success screen after account creation
+   if (isSuccess) {
+     return (
+       <div className="fixed inset-0 w-full lg:grid lg:grid-cols-[1fr_1fr]">
+         <div className="h-full hidden lg:block">
+-          <img
+-            src={successImage}
+-            alt="Success image"
+-            className="w-full h-full object-cover"
+-          />
++          <img src={successImage} alt="" className="w-full h-full object-cover" />
+         </div>
+-        <SignupSuccessScreen />
++        <SignupSuccessScreen notice={submitError} needsCompany={!companySlug} />
+       </div>
+     );
+   }
+@@ -189,50 +204,83 @@ const ClientSignup = () => {
+         className="flex-1 min-h-0 overflow-y-auto px-6 pb-[calc(2rem+env(safe-area-inset-bottom))]"
+       >
+         <div className="sm:max-w-[600px] sm:mx-auto">
+-        <div className="mb-6 lg:mb-8">
+-          <h1 className="text-3xl font-bold text-brandInfo-700 dark:text-brandAccent-400 font-bookmania mb-2">
+-            {currentContent.title}
+-          </h1>
+-          <p className="text-muted-foreground">{currentContent.subtitle}</p>
+-        </div>
++          {/* Confirma en qué negocio se está registrando, antes de teclear nada. */}
++          {company && (
++            <div className="mb-5 flex items-center gap-3 rounded-2xl border border-border bg-muted/40 p-3">
++              <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center overflow-hidden shrink-0">
++                {company.logoUrl ? (
++                  <img
++                    src={company.logoUrl}
++                    alt={company.name}
++                    className="w-full h-full object-cover"
++                  />
++                ) : (
++                  <Building2 className="w-5 h-5 text-primary" />
++                )}
++              </div>
++              <p className="text-sm text-muted-foreground">
++                Te estás registrando en{" "}
++                <span className="font-semibold text-foreground">{company.name}</span>
++              </p>
++            </div>
++          )}
+ 
+-        {currentStep === 1 && (
+-          <ClientSignupStep1Form
+-            onSubmit={handleStep1Submit}
+-            defaultValues={formData.step1}
+-          />
+-        )}
++          <div className="mb-6 lg:mb-8">
++            <h1 className="text-3xl font-bold text-brandInfo-700 dark:text-brandAccent-400 font-bookmania mb-2">
++              {currentContent.title}
++            </h1>
++            <p className="text-muted-foreground">{currentContent.subtitle}</p>
++          </div>
+ 
+-        {currentStep === 2 && (
+-          <ClientSignupStep2Form
+-            onSubmit={handleStep2Submit}
+-            defaultDogs={formData.dogs}
+-            editingDogId={editingDogId}
+-          />
+-        )}
++          {currentStep === 1 && (
++            <ClientSignupStep1Form
++              onSubmit={handleStep1Submit}
++              defaultValues={formData.step1}
++            />
++          )}
+ 
+-        {currentStep === 3 && formData.step1 && formData.dogs && (
+-          <ClientSignupStep3Form
+-            userInfo={formData.step1}
+-            dogs={formData.dogs}
+-            onConfirm={handleConfirm}
+-            onEditUserInfo={handleEditUserInfo}
+-            onEditDog={handleEditDog}
+-            loading={isSubmitting}
+-          />
+-        )}
++          {currentStep === 2 && (
++            <ClientSignupStep2Form
++              onSubmit={handleStep2Submit}
++              defaultDogs={formData.dogs}
++              editingDogId={editingDogId}
++            />
++          )}
+ 
+-        <div className="mt-6 text-center">
+-          <span className="text-sm text-muted-foreground">
+-            ¿Ya tienes una cuenta?{" "}
+-            <Link
+-              to="/auth/login"
+-              className="font-semibold text-secondary hover:text-secondary/80 underline underline-offset-2"
+-            >
+-              Inicia sesión
+-            </Link>
+-          </span>
+-        </div>
++          {currentStep === 3 && formData.step1 && formData.dogs && (
++            <>
++              <ClientSignupStep3Form
++                userInfo={formData.step1}
++                dogs={formData.dogs}
++                onConfirm={() => void handleConfirm()}
++                onEditUserInfo={() => {
++                  setCurrentStep(1);
++                  scrollToTop();
++                }}
++                onEditDog={(dogId) => {
++                  setEditingDogId(dogId);
++                  setCurrentStep(2);
++                  scrollToTop();
++                }}
++                loading={isSubmitting}
++              />
++              {submitError && (
++                <p className="mt-4 text-sm text-destructive text-center">{submitError}</p>
++              )}
++            </>
++          )}
++
++          <div className="mt-6 text-center">
++            <span className="text-sm text-muted-foreground">
++              ¿Ya tienes una cuenta?{" "}
++              <Link
++                to="/auth/login"
++                className="font-semibold text-secondary hover:text-secondary/80 underline underline-offset-2"
++              >
++                Inicia sesión
++              </Link>
++            </span>
++          </div>
+         </div>
+       </main>
+     </div>
+diff --git a/src/pages/authentication/RequestPasswordReset.tsx b/src/pages/authentication/RequestPasswordReset.tsx
+new file mode 100644
+index 0000000..0683119
+--- /dev/null
++++ b/src/pages/authentication/RequestPasswordReset.tsx
+@@ -0,0 +1,114 @@
++import { useState } from "react";
++import { Link } from "react-router-dom";
++import { useMutation } from "@apollo/client/react";
++import { Helmet } from "react-helmet-async";
++import { MailCheck } from "lucide-react";
++import { Button } from "@/components/ui/button";
++import { Card } from "@/components/ui/card";
++import { Input } from "@/components/ui/input";
++import { Spinner } from "@/components/ui/spinner";
++import Logo from "@/components/Logo";
++import { REQUEST_PASSWORD_RESET } from "@/graphql/user";
++
++/**
++ * Solicitud de restablecimiento.
++ *
++ * El servidor responde `true` exista o no la cuenta —lo contrario convertiría
++ * este formulario en un detector de correos registrados— así que la pantalla
++ * confirma en los mismos términos: "si existe, te llegó". No decir de más aquí
++ * es parte del diseño, no una omisión.
++ *
++ * `app: CLIENT` es lo que hace que el link del correo apunte a esta app y no
++ * a la del negocio.
++ */
++export default function RequestPasswordReset() {
++  const [email, setEmail] = useState("");
++  const [sent, setSent] = useState(false);
++
++  const [requestReset, { loading }] = useMutation(REQUEST_PASSWORD_RESET, {
++    onCompleted: () => setSent(true),
++    // Un fallo de red tampoco debe revelar nada distinto.
++    onError: () => setSent(true),
++  });
++
++  return (
++    <>
++      <Helmet>
++        <title>AdPaws | Recuperar contraseña</title>
++      </Helmet>
++
++      <Card className="w-full max-w-9/10 md:max-w-[400px] border border-border rounded-lg p-6 flex flex-col gap-5">
++        <div className="flex justify-center">
++          <Logo className="w-40" />
++        </div>
++
++        {sent ? (
++          <div className="flex flex-col items-center gap-4 text-center">
++            <div className="w-16 h-16 rounded-full bg-primary/15 flex items-center justify-center">
++              <MailCheck className="w-8 h-8 text-primary" />
++            </div>
++            <div className="space-y-1.5">
++              <p className="text-lg font-semibold text-foreground">Revisa tu correo</p>
++              <p className="text-sm text-muted-foreground leading-relaxed">
++                Si <span className="font-medium text-foreground">{email}</span>{" "}
++                tiene una cuenta, te enviamos un link para crear una contraseña
++                nueva. Caduca en una hora.
++              </p>
++            </div>
++            <Link
++              to="/auth/login"
++              className="text-sm font-semibold text-secondary hover:text-secondary/80 underline underline-offset-2"
++            >
++              Volver al inicio de sesión
++            </Link>
++          </div>
++        ) : (
++          <>
++            <div className="text-center space-y-1.5">
++              <h1 className="text-xl font-bold text-foreground">
++                ¿Olvidaste tu contraseña?
++              </h1>
++              <p className="text-sm text-muted-foreground">
++                Te mandamos un link para crear una nueva.
++              </p>
++            </div>
++
++            <form
++              className="flex flex-col gap-4"
++              onSubmit={(event) => {
++                event.preventDefault();
++                void requestReset({
++                  variables: { input: { email: email.trim(), app: "CLIENT" } },
++                });
++              }}
++            >
++              <Input
++                type="email"
++                required
++                value={email}
++                onChange={(e) => setEmail(e.target.value)}
++                placeholder="tu.correo@ejemplo.com"
++                aria-label="Correo electrónico"
++              />
++              <Button
++                type="submit"
++                size="lg"
++                disabled={loading || !email.trim()}
++                className="w-full rounded-full h-12"
++              >
++                {loading ? <Spinner className="size-4" /> : "Enviar link"}
++              </Button>
++            </form>
++
++            <Link
++              to="/auth/login"
++              className="text-sm text-center text-muted-foreground hover:text-foreground transition-colors"
++            >
++              Volver al inicio de sesión
++            </Link>
++          </>
++        )}
++      </Card>
++    </>
++  );
++}
+diff --git a/src/pages/authentication/ResetPassword.tsx b/src/pages/authentication/ResetPassword.tsx
+new file mode 100644
+index 0000000..867419f
+--- /dev/null
++++ b/src/pages/authentication/ResetPassword.tsx
+@@ -0,0 +1,145 @@
++import { useState } from "react";
++import { Link, useNavigate, useSearchParams } from "react-router-dom";
++import { useMutation } from "@apollo/client/react";
++import { Helmet } from "react-helmet-async";
++import { Check, XCircle } from "lucide-react";
++import { Button } from "@/components/ui/button";
++import { Card } from "@/components/ui/card";
++import { Input } from "@/components/ui/input";
++import { Spinner } from "@/components/ui/spinner";
++import Logo from "@/components/Logo";
++import { CONFIRM_PASSWORD_RESET } from "@/graphql/user";
++import { messageFor } from "@/lib/api/errors";
++import { PASSWORD_HINT, validatePassword } from "@/lib/password";
++
++/**
++ * Confirmación del restablecimiento.
++ *
++ * Al terminar, el backend invalida TODAS las sesiones de esa cuenta —es el
++ * objetivo de restablecer por sospecha de compromiso— así que la app no
++ * intenta dejar al usuario dentro: lo manda al login, que es donde va a
++ * acabar de todos modos.
++ */
++export default function ResetPassword() {
++  const [searchParams] = useSearchParams();
++  const navigate = useNavigate();
++  const token = searchParams.get("token");
++
++  const [password, setPassword] = useState("");
++  const [confirmation, setConfirmation] = useState("");
++  const [done, setDone] = useState(false);
++
++  const [confirmReset, { loading, error }] = useMutation(CONFIRM_PASSWORD_RESET, {
++    onCompleted: () => {
++      setDone(true);
++      setTimeout(() => navigate("/auth/login", { replace: true }), 2500);
++    },
++  });
++
++  const localError =
++    password && confirmation && password !== confirmation
++      ? "Las contraseñas no coinciden."
++      : password
++        ? validatePassword(password)
++        : null;
++
++  if (!token) {
++    return (
++      <Card className="w-full max-w-9/10 md:max-w-[400px] border border-border rounded-lg p-8 flex flex-col items-center gap-5">
++        <XCircle className="w-14 h-14 text-destructive" />
++        <p className="text-center text-sm text-muted-foreground">
++          El link no es válido. Pide uno nuevo desde la pantalla de inicio de
++          sesión.
++        </p>
++        <Link
++          to="/auth/recuperar"
++          className="text-sm font-semibold text-secondary underline underline-offset-2"
++        >
++          Pedir un link nuevo
++        </Link>
++      </Card>
++    );
++  }
++
++  return (
++    <>
++      <Helmet>
++        <title>AdPaws | Nueva contraseña</title>
++      </Helmet>
++
++      <Card className="w-full max-w-9/10 md:max-w-[400px] border border-border rounded-lg p-6 flex flex-col gap-5">
++        <div className="flex justify-center">
++          <Logo className="w-40" />
++        </div>
++
++        {done ? (
++          <div className="flex flex-col items-center gap-4 text-center">
++            <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center">
++              <Check className="w-8 h-8 text-white stroke-[3]" />
++            </div>
++            <div className="space-y-1.5">
++              <p className="text-lg font-semibold text-foreground">
++                Contraseña actualizada
++              </p>
++              <p className="text-sm text-muted-foreground leading-relaxed">
++                Por seguridad cerramos tus sesiones en todos los dispositivos.
++                Te llevamos al inicio de sesión.
++              </p>
++            </div>
++          </div>
++        ) : (
++          <>
++            <div className="text-center space-y-1.5">
++              <h1 className="text-xl font-bold text-foreground">Crea tu nueva contraseña</h1>
++              <p className="text-sm text-muted-foreground">{PASSWORD_HINT}</p>
++            </div>
++
++            <form
++              className="flex flex-col gap-4"
++              onSubmit={(event) => {
++                event.preventDefault();
++                if (localError) return;
++                void confirmReset({
++                  variables: { input: { token, newPassword: password } },
++                });
++              }}
++            >
++              <Input
++                type="password"
++                required
++                value={password}
++                onChange={(e) => setPassword(e.target.value)}
++                placeholder="Nueva contraseña"
++                aria-label="Nueva contraseña"
++              />
++              <Input
++                type="password"
++                required
++                value={confirmation}
++                onChange={(e) => setConfirmation(e.target.value)}
++                placeholder="Confírmala"
++                aria-label="Confirmar contraseña"
++              />
++
++              {localError && (
++                <p className="text-sm text-destructive">{localError}</p>
++              )}
++              {error && !localError && (
++                <p className="text-sm text-destructive">{messageFor(error)}</p>
++              )}
++
++              <Button
++                type="submit"
++                size="lg"
++                disabled={loading || !password || !confirmation || localError !== null}
++                className="w-full rounded-full h-12"
++              >
++                {loading ? <Spinner className="size-4" /> : "Guardar contraseña"}
++              </Button>
++            </form>
++          </>
++        )}
++      </Card>
++    </>
++  );
++}
+diff --git a/src/pages/authentication/VerifyEmail.tsx b/src/pages/authentication/VerifyEmail.tsx
+index 5fdeb42..a9ebda3 100644
+--- a/src/pages/authentication/VerifyEmail.tsx
++++ b/src/pages/authentication/VerifyEmail.tsx
+@@ -1,25 +1,18 @@
+ import { useEffect, useRef } from "react";
+ import { useNavigate, useSearchParams } from "react-router-dom";
+ import { useMutation } from "@apollo/client/react";
+-import { VERIFY_EMAIL_MUTATION } from "@/lib/api/user.api";
++import { VERIFY_EMAIL } from "@/graphql/user";
+ import { Check, Loader2, XCircle } from "lucide-react";
+ import { Button } from "@/components/ui/button";
+ import { Card } from "@/components/ui/card";
+ import Logo from "@/components/Logo";
+ import { useAuth } from "@/contexts/AuthContext";
+ 
+-interface VerifyEmailResponse {
+-  verifyEmail: {
+-    accessToken: string;
+-    refreshToken: string;
+-  };
+-}
+-
+ type VerifyState = "loading" | "success" | "error";
+ 
+ function getVerifyState(
+   loading: boolean,
+-  data: VerifyEmailResponse | null | undefined,
++  data: { verifyEmail?: { accessToken: string } } | null | undefined,
+   error: unknown,
+ ): VerifyState {
+   if (loading) return "loading";
+@@ -31,9 +24,17 @@ function getVerifyState(
+ export default function VerifyEmail() {
+   const [searchParams] = useSearchParams();
+   const navigate = useNavigate();
+-  const { isAuthenticated } = useAuth();
+-  const [verifyEmail, { loading, data, error }] =
+-    useMutation<VerifyEmailResponse>(VERIFY_EMAIL_MUTATION);
++  const { login } = useAuth();
++  /**
++   * `verifyEmail` devuelve un par de tokens nuevo y NO abre sesión de cookie,
++   * a diferencia de createUser y signUser. Con Bearer eso es una ventaja:
++   * verificar desde otro dispositivo deja la sesión iniciada ahí mismo.
++   */
++  const [verifyEmail, { loading, data, error }] = useMutation(VERIFY_EMAIL, {
++    onCompleted: (result) => {
++      if (result.verifyEmail) void login(result.verifyEmail);
++    },
++  });
+ 
+   const hasRun = useRef(false);
+ 
+@@ -53,10 +54,10 @@ export default function VerifyEmail() {
+ 
+   useEffect(() => {
+     if (!data?.verifyEmail) return;
+-    const destination = isAuthenticated ? "/" : "/auth/login";
++    const destination = "/";
+     const timer = setTimeout(() => navigate(destination, { replace: true }), 3000);
+     return () => clearTimeout(timer);
+-  }, [data, navigate, isAuthenticated]);
++  }, [data, navigate]);
+ 
+   const state = getVerifyState(loading, data, error);
+ 
+@@ -88,16 +89,14 @@ export default function VerifyEmail() {
+               ¡Cuenta verificada!
+             </p>
+             <p className="text-sm text-muted-foreground">
+-              {isAuthenticated
+-                ? "Te redirigiremos al dashboard en unos segundos."
+-                : "Te redirigiremos al inicio de sesión en unos segundos."}
++              Te llevamos a tu cuenta en unos segundos.
+             </p>
+           </div>
+           <Button
+             className="w-full rounded-full"
+-            onClick={() => navigate(isAuthenticated ? "/" : "/auth/login", { replace: true })}
++            onClick={() => navigate("/", { replace: true })}
+           >
+-            {isAuthenticated ? "Ir al dashboard" : "Ir al inicio de sesión"}
++            Ir a mi cuenta
+           </Button>
+         </>
+       )}
+diff --git a/src/pages/authentication/login.tsx b/src/pages/authentication/login.tsx
+index ba37d7f..6fc9fba 100644
+--- a/src/pages/authentication/login.tsx
++++ b/src/pages/authentication/login.tsx
+@@ -1,8 +1,7 @@
+ import { SIGN_IN } from "@/graphql/user";
+-import { setTokens } from "@/lib/session";
+ import { useMutation } from "@apollo/client/react";
+ import { useEffect } from "react";
+-import { useNavigate, useLocation } from "react-router-dom";
++import { Link, useNavigate, useLocation } from "react-router-dom";
+ import LoginForm from "@/components/Form/Forms/LoginForm";
+ import Logo from "@/components/Logo";
+ import { useAuth } from "@/contexts/AuthContext";
+@@ -27,10 +26,9 @@ export default function Login() {
+     const handleLogin = async () => {
+       if (data?.signUser) {
+         try {
+-          // Con Bearer los tokens se guardan: son la sesión, no un subproducto
+-          // del login como cuando todo dependía de la cookie.
+-          setTokens(data.signUser);
+-          await login();
++          // Con Bearer los tokens SON la sesión, no un subproducto del login
++          // como cuando todo dependía de la cookie.
++          await login(data.signUser);
+ 
+           // Redirect to the page they were trying to access, or home
+           const from =
+@@ -63,6 +61,12 @@ export default function Login() {
+         </div>
+       )}
+       <LoginForm onSubmit={onSubmit} loading={loading} />
++      <Link
++        to="/auth/recuperar"
++        className="text-sm text-center text-muted-foreground hover:text-foreground transition-colors"
++      >
++        ¿Olvidaste tu contraseña?
++      </Link>
+     </Card>
+   );
+ }
+diff --git a/src/pages/onboarding/LinkCompany.tsx b/src/pages/onboarding/LinkCompany.tsx
+new file mode 100644
+index 0000000..0ad287a
+--- /dev/null
++++ b/src/pages/onboarding/LinkCompany.tsx
+@@ -0,0 +1,160 @@
++import { useState } from "react";
++import { useNavigate } from "react-router-dom";
++import { useMutation, useLazyQuery } from "@apollo/client/react";
++import { Helmet } from "react-helmet-async";
++import { Building2, Check } from "lucide-react";
++import { Button } from "@/components/ui/button";
++import { Card } from "@/components/ui/card";
++import { Input } from "@/components/ui/input";
++import { Spinner } from "@/components/ui/spinner";
++import Logo from "@/components/Logo";
++import { COMPANY_BY_SLUG, JOIN_COMPANY } from "@/graphql/company";
++import { useAuth } from "@/contexts/AuthContext";
++import { messageFor } from "@/lib/api/errors";
++
++/**
++ * Vinculación con un negocio para una cuenta que aún no pertenece a ninguno.
++ *
++ * Pasa cuando alguien se registró sin el link del negocio, o cuando quiere
++ * añadir una segunda sucursal. La confirmación intermedia —buscar, ver el
++ * nombre, aceptar— existe porque un slug mal tecleado que vincula en silencio
++ * es un error que el usuario no puede deshacer solo.
++ */
++export default function LinkCompany() {
++  const navigate = useNavigate();
++  const { refetchUser, logout } = useAuth();
++  const [slug, setSlug] = useState("");
++  const [notFound, setNotFound] = useState(false);
++
++  const [search, { data, loading: searching }] = useLazyQuery(COMPANY_BY_SLUG, {
++    fetchPolicy: "network-only",
++  });
++
++  const [joinCompany, { loading: joining, error: joinError }] = useMutation(
++    JOIN_COMPANY,
++    {
++      onCompleted: async () => {
++        await refetchUser();
++        navigate("/inicio", { replace: true });
++      },
++    },
++  );
++
++  const company = data?.companyBySlug ?? null;
++
++  const handleSearch = async (event: React.FormEvent) => {
++    event.preventDefault();
++    const normalised = slug.trim().toLowerCase();
++    if (!normalised) return;
++    setNotFound(false);
++    const result = await search({ variables: { slug: normalised } });
++    setNotFound(!result.data?.companyBySlug);
++  };
++
++  return (
++    <>
++      <Helmet>
++        <title>AdPaws | Vincular negocio</title>
++      </Helmet>
++
++      <div className="min-h-dvh w-full flex items-center justify-center px-4 py-8">
++        <Card className="w-full max-w-md border border-border rounded-lg p-6 flex flex-col gap-5">
++          <div className="flex justify-center">
++            <Logo className="w-40" />
++          </div>
++
++          <div className="text-center space-y-1.5">
++            <h1 className="text-xl font-bold text-foreground">
++              Vincula tu cuenta a un negocio
++            </h1>
++            <p className="text-sm text-muted-foreground leading-relaxed">
++              Escribe el código que te dio tu guardería u hotel canino. Suele
++              venir en el link o el QR que te compartieron.
++            </p>
++          </div>
++
++          <form onSubmit={(e) => void handleSearch(e)} className="flex flex-col gap-3">
++            <Input
++              value={slug}
++              onChange={(e) => setSlug(e.target.value)}
++              placeholder="ej. casa-perruna"
++              autoCapitalize="none"
++              autoCorrect="off"
++              spellCheck={false}
++              aria-label="Código del negocio"
++            />
++            <Button
++              type="submit"
++              variant="outline"
++              className="rounded-full h-11"
++              disabled={searching || !slug.trim()}
++            >
++              {searching ? <Spinner className="size-4" /> : "Buscar negocio"}
++            </Button>
++          </form>
++
++          {notFound && (
++            <p className="text-sm text-destructive text-center">
++              No encontramos ningún negocio con ese código. Revísalo con ellos.
++            </p>
++          )}
++
++          {company && (
++            <div className="flex flex-col gap-3 rounded-2xl border border-border bg-muted/40 p-4">
++              <div className="flex items-center gap-3">
++                <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center overflow-hidden shrink-0">
++                  {company.logoUrl ? (
++                    <img
++                      src={company.logoUrl}
++                      alt={company.name}
++                      className="w-full h-full object-cover"
++                    />
++                  ) : (
++                    <Building2 className="w-6 h-6 text-primary" />
++                  )}
++                </div>
++                <div className="min-w-0">
++                  <p className="font-semibold text-foreground truncate">
++                    {company.name}
++                  </p>
++                  <p className="text-xs text-muted-foreground">/{company.slug}</p>
++                </div>
++              </div>
++
++              <Button
++                type="button"
++                className="rounded-full h-11"
++                disabled={joining}
++                onClick={() =>
++                  void joinCompany({ variables: { slug: company.slug } })
++                }
++              >
++                {joining ? (
++                  <Spinner className="size-4" />
++                ) : (
++                  <>
++                    <Check className="w-4 h-4" /> Sí, es mi negocio
++                  </>
++                )}
++              </Button>
++            </div>
++          )}
++
++          {joinError && (
++            <p className="text-sm text-destructive text-center">
++              {messageFor(joinError)}
++            </p>
++          )}
++
++          <button
++            type="button"
++            onClick={() => void logout()}
++            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
++          >
++            Cerrar sesión
++          </button>
++        </Card>
++      </div>
++    </>
++  );
++}
+diff --git a/src/pages/profile/Profile.tsx b/src/pages/profile/Profile.tsx
+index 2911541..a29a9c9 100644
+--- a/src/pages/profile/Profile.tsx
++++ b/src/pages/profile/Profile.tsx
+@@ -1,19 +1,13 @@
+-import { useQuery, useMutation } from "@apollo/client/react";
+-import { USER_PROFILE_QUERY, UPDATE_USER_MUTATION } from "@/lib/api/user.api";
++import { useState } from "react";
++import { useMutation, useQuery } from "@apollo/client/react";
++import { Helmet } from "react-helmet-async";
++import { ChevronRight, LogOut } from "lucide-react";
++import { ME, UPDATE_USER } from "@/graphql/user";
+ import { UserInfoForm, type UserInfoFormValues } from "@/components/Form/Forms/UserInfoForm";
++import ChangePasswordForm from "@/components/Form/Forms/ChangePasswordForm";
+ import { Skeleton } from "@/components/ui/skeleton";
+-import { Helmet } from "react-helmet-async";
+ import { useAuth } from "@/contexts/AuthContext";
+-
+-interface UserProfile {
+-  id: string;
+-  name: string;
+-  lastname: string;
+-  email: string;
+-  phone: string;
+-  gender: "Female" | "Male" | "Other" | "";
+-  birthDate: string;
+-}
++import { messageFor } from "@/lib/api/errors";
+ 
+ function ProfileAvatar({ name, lastname }: { name: string; lastname: string }) {
+   const initials = [name[0], lastname[0]].filter(Boolean).join("").toUpperCase();
+@@ -49,26 +43,32 @@ function ProfileSkeleton() {
+ }
+ 
+ export default function Profile() {
+-  const { refetchUser } = useAuth();
+-  const { data, loading } = useQuery<{ user: UserProfile }>(USER_PROFILE_QUERY, {
+-    fetchPolicy: "network-only",
+-  });
++  const { refetchUser, logout, activeCompany, companies, selectCompany } = useAuth();
++  const [showPasswordForm, setShowPasswordForm] = useState(false);
++
++  const { data, loading } = useQuery(ME, { fetchPolicy: "network-only" });
+ 
+-  const [updateUser, { loading: updating }] = useMutation(UPDATE_USER_MUTATION, {
+-    onCompleted: () => refetchUser(),
+-  });
++  const [updateUser, { loading: updating, error: updateError }] = useMutation(
++    UPDATE_USER,
++    { onCompleted: () => void refetchUser() },
++  );
+ 
+-  const user = data?.user;
++  const user = data?.me;
+ 
++  /**
++   * `UpdateUserInput` sólo acepta nombre, apellido, teléfono, género y fecha.
++   * El correo salió a propósito —cambiarlo invalidaría la verificación— y la
++   * contraseña tiene su propia mutación, que exige la actual.
++   */
+   const handleSubmit = (values: UserInfoFormValues) => {
+-    updateUser({
++    void updateUser({
+       variables: {
+         input: {
+           name: values.name,
+           lastname: values.lastname,
+           phone: values.phone,
+-          gender: values.gender,
+-          birthDate: values.birthdate?.toISOString(),
++          gender: values.gender || null,
++          birthDate: values.birthdate?.toISOString() ?? null,
+         },
+       },
+     });
+@@ -81,26 +81,90 @@ export default function Profile() {
+       </Helmet>
+ 
+       <div className="h-full overflow-auto">
+-        <div className="px-6">
++        <div className="px-6 pb-8">
+           {loading || !user ? (
+             <ProfileSkeleton />
+           ) : (
+             <>
+-              <ProfileAvatar name={user.name} lastname={user.lastname} />
++              <ProfileAvatar name={user.name ?? ""} lastname={user.lastname ?? ""} />
++
+               <UserInfoForm
+                 onSubmit={handleSubmit}
+                 loading={updating}
+                 disableEmail
+                 hidePassword
+                 defaultValues={{
+-                  name: user.name,
+-                  lastname: user.lastname,
++                  name: user.name ?? "",
++                  lastname: user.lastname ?? "",
+                   email: user.email,
+                   phone: user.phone ?? "",
+                   gender: user.gender ?? "",
+                   birthdate: user.birthDate ? new Date(user.birthDate) : undefined,
+                 }}
+               />
++
++              {updateError && (
++                <p className="mt-3 text-sm text-destructive">{messageFor(updateError)}</p>
++              )}
++
++              <section className="mt-8 flex flex-col gap-2">
++                <p className="text-sm font-semibold text-muted-foreground">Seguridad</p>
++
++                {showPasswordForm ? (
++                  <ChangePasswordForm onDone={() => setShowPasswordForm(false)} />
++                ) : (
++                  <button
++                    type="button"
++                    onClick={() => setShowPasswordForm(true)}
++                    className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3.5 text-left transition-colors hover:bg-muted"
++                  >
++                    <span className="text-sm font-medium text-foreground">
++                      Cambiar contraseña
++                    </span>
++                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
++                  </button>
++                )}
++              </section>
++
++              {/*
++                Selector de negocio. Sólo aparece con más de una membresía: es
++                el caso en que `x-company-id` deja de ser opcional y el usuario
++                tiene que poder decir sobre cuál está mirando.
++              */}
++              {companies.length > 1 && (
++                <section className="mt-8 flex flex-col gap-2">
++                  <p className="text-sm font-semibold text-muted-foreground">Negocio</p>
++                  {companies.map((company) => (
++                    <button
++                      key={company.id}
++                      type="button"
++                      onClick={() => selectCompany(company.id)}
++                      className={
++                        "flex items-center justify-between rounded-xl border px-4 py-3.5 text-left transition-colors " +
++                        (company.id === activeCompany?.id
++                          ? "border-primary bg-primary/10"
++                          : "border-border bg-card hover:bg-muted")
++                      }
++                    >
++                      <span className="text-sm font-medium text-foreground">
++                        {company.name}
++                      </span>
++                      {company.id === activeCompany?.id && (
++                        <span className="text-xs font-semibold text-primary">Activo</span>
++                      )}
++                    </button>
++                  ))}
++                </section>
++              )}
++
++              <button
++                type="button"
++                onClick={() => void logout()}
++                className="mt-8 flex w-full items-center justify-center gap-2 rounded-full border border-border px-4 py-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted"
++              >
++                <LogOut className="h-4 w-4" />
++                Cerrar sesión
++              </button>
+             </>
+           )}
+         </div>
+diff --git a/src/routes.tsx b/src/routes.tsx
+index 0badbba..9432534 100644
+--- a/src/routes.tsx
++++ b/src/routes.tsx
+@@ -1,14 +1,17 @@
+ import { createBrowserRouter, Navigate } from "react-router-dom";
+ import AuthenticationLayout from "./layouts/AuthenticationLayout";
+-import Login from "./pages/authentication/login";
++import DashboardLayout from "./layouts/DashboardLayout";
+ import { ProtectedRoute } from "./components/ProtectedRoute";
+ import { PublicRoute } from "./components/PublicRoute";
+-import Dashboard from "./pages/dashboard/Dashboard";
+-import DashboardLayout from "./layouts/DashboardLayout";
++import Login from "./pages/authentication/login";
+ import ClientSignup from "./pages/authentication/ClientSignup";
+ import VerifyEmail from "./pages/authentication/VerifyEmail";
+-import Profile from "./pages/profile/Profile";
++import RequestPasswordReset from "./pages/authentication/RequestPasswordReset";
++import ResetPassword from "./pages/authentication/ResetPassword";
++import LinkCompany from "./pages/onboarding/LinkCompany";
++import Dashboard from "./pages/dashboard/Dashboard";
+ import DogProfile from "./pages/dog/DogProfile";
++import Profile from "./pages/profile/Profile";
+ 
+ export const routes = createBrowserRouter([
+   {
+@@ -51,9 +54,14 @@ export const routes = createBrowserRouter([
+     ],
+   },
+   {
++    /**
++     * El perfil sigue accesible sin negocio: `me` y `updateUser` no necesitan
++     * empresa activa, y es la única forma de que alguien sin vincular pueda
++     * corregir sus datos o cerrar sesión.
++     */
+     path: "/perfil",
+     element: (
+-      <ProtectedRoute>
++      <ProtectedRoute allowWithoutCompany>
+         <DashboardLayout />
+       </ProtectedRoute>
+     ),
+@@ -64,6 +72,14 @@ export const routes = createBrowserRouter([
+       },
+     ],
+   },
++  {
++    path: "/vincular-negocio",
++    element: (
++      <ProtectedRoute allowWithoutCompany>
++        <LinkCompany />
++      </ProtectedRoute>
++    ),
++  },
+   {
+     path: "/auth",
+     element: (
+@@ -80,6 +96,14 @@ export const routes = createBrowserRouter([
+         path: "verificar-cuenta",
+         Component: VerifyEmail,
+       },
++      {
++        path: "recuperar",
++        Component: RequestPasswordReset,
++      },
++      {
++        path: "restablecer",
++        Component: ResetPassword,
++      },
+     ],
+   },
+   {
+diff --git a/src/utils/translators.ts b/src/utils/translators.ts
+index c3b4b61..7f7a552 100644
+--- a/src/utils/translators.ts
++++ b/src/utils/translators.ts
+@@ -1,18 +1,25 @@
+ import type { DogFormValues } from "@/components/Form/Forms/ClientSignupStep2Form";
++import type { CreateDogInput } from "@/generated/schema-types";
+ 
+-export const translateDogFormToBody = (dog: DogFormValues, ownerId: number) => {
+-  console.log("Dog to translate:", dog);
+-  const dogTranslated = {
+-    birthDate: dog.birthDate?.toISOString(),
+-    ownerId: ownerId,
+-    size: dog.size as "SMALL" | "MEDIUM" | "LARGE" | "GIGANTIC",
+-    gender: dog.gender as "Male" | "Female",
+-    weight: parseInt(dog.weight),
+-    breed: dog.breed,
+-    color: dog.color,
+-    name: dog.name,
+-    picture: dog.photo,
+-  };
+-  console.log("Dog translated:", dogTranslated);
+-  return dogTranslated;
+-};
++/**
++ * Del formulario a `CreateDogInput`.
++ *
++ * Tres cosas cambiaron con el backend nuevo y las tres se resuelven aquí:
++ *
++ * - `weight: Float` pasó a `weightKg: String`. Es un decimal, y mandarlo como
++ *   número es exactamente lo que la base evita usando Decimal. El
++ *   `parseInt` anterior además tiraba los gramos: 8.4 kg se guardaba como 8.
++ * - `ownerId` ya no se manda: un cliente que crea un perro siempre queda como
++ *   dueño, lo decida el servidor y no la petición.
++ * - `picture` no existe en el input. La foto se sube aparte con
++ *   `uploadDogImage`, una vez que el perro tiene id.
++ */
++export const toCreateDogInput = (dog: DogFormValues): CreateDogInput => ({
++  name: dog.name,
++  size: dog.size as CreateDogInput["size"],
++  breed: dog.breed || null,
++  color: dog.color || null,
++  gender: dog.gender || null,
++  birthDate: dog.birthDate ? dog.birthDate.toISOString() : null,
++  weightKg: dog.weight ? String(dog.weight).trim() : null,
++});
+-- 
+2.43.0
+

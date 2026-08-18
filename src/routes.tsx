@@ -11,7 +11,10 @@ import ResetPassword from "./pages/authentication/ResetPassword";
 import LinkCompany from "./pages/onboarding/LinkCompany";
 import Dashboard from "./pages/dashboard/Dashboard";
 import DogProfile from "./pages/dog/DogProfile";
+import NewDog from "./pages/dog/NewDog";
 import Profile from "./pages/profile/Profile";
+import NewReservation from "./pages/booking/NewReservation";
+import ReservationDetail from "./pages/reservations/ReservationDetail";
 
 export const routes = createBrowserRouter([
   {
@@ -36,6 +39,21 @@ export const routes = createBrowserRouter([
         handle: {
           title: "AdPaws | Inicio",
         },
+      },
+    ],
+  },
+  {
+    /* Antes que la ruta dinámica: "nuevo" no es un id. */
+    path: "/mis-perros/nuevo",
+    element: (
+      <ProtectedRoute>
+        <DashboardLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      {
+        path: "",
+        Component: NewDog,
       },
     ],
   },
@@ -69,6 +87,34 @@ export const routes = createBrowserRouter([
       {
         path: "",
         Component: Profile,
+      },
+    ],
+  },
+  {
+    path: "/reservar",
+    element: (
+      <ProtectedRoute>
+        <DashboardLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      {
+        path: "",
+        Component: NewReservation,
+      },
+    ],
+  },
+  {
+    path: "/reservas/:reservationId",
+    element: (
+      <ProtectedRoute>
+        <DashboardLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      {
+        path: "",
+        Component: ReservationDetail,
       },
     ],
   },

@@ -11,9 +11,10 @@ import ClientSignupStep2Form, {
 import ClientSignupStep3Form from "@/components/Form/Forms/ClientSignupStep3Form";
 import SignupSuccessScreen from "@/components/Form/Forms/SignupSuccessScreen";
 import { CREATE_USER } from "@/graphql/user";
-import { CREATE_DOG } from "@/graphql/dogs";
+import { CREATE_DOG, UPLOAD_DOG_IMAGE } from "@/graphql/dogs";
 import { COMPANY_BY_SLUG } from "@/graphql/company";
 import { setTokens } from "@/lib/session";
+import { savePendingDogs } from "@/lib/pendingDogs";
 import { messageFor } from "@/lib/api/errors";
 import { toCreateDogInput } from "@/utils/translators";
 import successImage from "@/assets/success.png";
@@ -67,6 +68,7 @@ const ClientSignup = () => {
 
   const [createUser] = useMutation(CREATE_USER);
   const [createDog] = useMutation(CREATE_DOG);
+  const [uploadDogImage] = useMutation(UPLOAD_DOG_IMAGE);
 
   const scrollToTop = () => {
     document.getElementById("main-content")?.scrollTo({ top: 0, behavior: "smooth" });
@@ -125,12 +127,44 @@ const ClientSignup = () => {
       if (!tokens) throw new Error("La cuenta se creó pero no recibimos sesión.");
       setTokens(tokens);
 
-      // Sin negocio no hay dónde registrar un perro: se hará tras vincularse.
+      /**
+       * Sin negocio no hay dónde registrar un perro —`createDog` exige empresa
+       * activa— así que quedan en espera hasta que la cuenta se vincule. Antes
+       * se descartaban en silencio: el formulario los pedía y luego no
+       * existían.
+       */
+      if (!companySlug) {
+        savePendingDogs(
+          dogs.map(toCreateDogInput),
+          dogs.map((dog) => dog.photo ?? null),
+        );
+      }
+
       if (companySlug) {
         const failed: string[] = [];
+        const photoFailed: string[] = [];
+
         for (const dog of dogs) {
           try {
-            await createDog({ variables: { input: toCreateDogInput(dog) } });
+            const result = await createDog({
+              variables: { input: toCreateDogInput(dog) },
+            });
+
+            /**
+             * La foto va en una segunda llamada porque `CreateDogInput` no la
+             * acepta: `uploadDogImage` necesita un id que hasta ahora no
+             * existía. Antes el formulario pedía la foto y nadie la subía
+             * nunca.
+             */
+            const dogId = result.data?.createDog.id;
+            if (dogId && dog.photo) {
+              try {
+                await uploadDogImage({ variables: { id: dogId, file: dog.photo } });
+              } catch {
+                // El perro sí quedó registrado; sólo falta su foto.
+                photoFailed.push(dog.name);
+              }
+            }
           } catch {
             failed.push(dog.name);
           }
@@ -140,6 +174,11 @@ const ClientSignup = () => {
           setSubmitError(
             `Tu cuenta quedó lista, pero no pudimos guardar a ${failed.join(", ")}. ` +
               `Puedes agregarlo desde la app.`,
+          );
+        } else if (photoFailed.length > 0) {
+          setSubmitError(
+            `Registramos a ${photoFailed.join(", ")}, pero su foto no se subió. ` +
+              `Puedes agregarla desde su perfil.`,
           );
         }
       }

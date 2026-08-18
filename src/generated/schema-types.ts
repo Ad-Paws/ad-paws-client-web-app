@@ -69,6 +69,11 @@ export type ChangePasswordInput = {
 
 export type Company = {
   address?: Maybe<Address>;
+  /**
+   * Hours before arrival that a client may still cancel on their own. The app
+   * needs it to say "hasta 24 horas antes" instead of guessing.
+   */
+  cancellationWindowHours: Scalars['Int']['output'];
   createdAt: Scalars['DateTime']['output'];
   currency: Scalars['String']['output'];
   email: Scalars['String']['output'];
@@ -439,7 +444,14 @@ export type Mutation = {
   /** Soft delete. Past reservations keep their price snapshots. */
   archiveService: Service;
   cancelDogPackage: DogPackage;
-  /** Frees the dates and voids the charges. Never deletes billing history. */
+  /**
+   * Frees the dates and voids the charges. Never deletes billing history.
+   *
+   * A client may cancel their OWN reservation, while it is still PENDING and
+   * before the company's cancellation window closes; `reason` is required for
+   * them. Staff cancel anything, at any time, with the customer in front of
+   * them — that conversation already happened.
+   */
   cancelReservation: Reservation;
   changeMemberRole: CompanyMembership;
   changePassword: Scalars['Boolean']['output'];

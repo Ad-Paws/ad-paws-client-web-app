@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { HouseIcon, UserIcon, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,11 +20,18 @@ const navItemsRight: NavItem[] = [
   },
 ];
 
+/**
+ * El botón central llevaba desde el inicio sin hacer nada: `onCenterPress`
+ * nunca se pasaba desde el layout. Por defecto ahora abre el flujo de reserva,
+ * que es para lo que estaba puesto ahí.
+ */
 export default function BottomNav({
   onCenterPress,
 }: {
   onCenterPress?: () => void;
 }) {
+  const navigate = useNavigate();
+
   return (
     <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-md">
       <nav className="relative flex items-center justify-around bg-white dark:bg-card rounded-2xl shadow-lg shadow-black/10 border border-border px-2">
@@ -36,8 +43,8 @@ export default function BottomNav({
         {/* Center CTA */}
         <button
           type="button"
-          onClick={onCenterPress}
-          aria-label="Acción principal"
+          onClick={onCenterPress ?? (() => navigate("/reservar"))}
+          aria-label="Reservar"
           className="relative -top-5 flex items-center justify-center w-14 h-14 rounded-full bg-secondary shadow-lg shadow-secondary/40 text-white transition-transform active:scale-95 hover:bg-secondary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary focus-visible:ring-offset-2"
         >
           <Plus className="w-6 h-6 stroke-[2.5]" />

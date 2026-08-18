@@ -32,6 +32,7 @@ export const MY_COMPANIES = graphql(`
       slug
       timezone
       currency
+      cancellationWindowHours
     }
   }
 `);

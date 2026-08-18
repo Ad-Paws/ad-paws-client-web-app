@@ -25,3 +25,6 @@ dist-ssr
 .env
 # codegen: src/generated se commitea a propósito (CI verifica que no derive),
 # ver codegen.ts y el plan §F0.
+
+# npm no se usa aquí: el proyecto es pnpm
+package-lock.json
